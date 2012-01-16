@@ -5,6 +5,7 @@
 //#define SHOWMEM
 //#define SHOWROM
 #define DISASSEMBLE
+//#define BIGPC
 //-------------------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +25,14 @@ unsigned int sreg;
 #define IBIT (1<<7)
 unsigned char reg[32];
 unsigned char mem[0x10000];
-unsigned short rom[0x8000];
+#ifdef BIGPC
+#define ROMMASK 0x3FFFFF
+#else
+#define ROMMASK 0x00FFFF
+#endif
+unsigned short rom[ROMMASK+1];
+void set_tbit ( void ) { sreg|=TBIT; }
+void clr_tbit ( void ) { sreg&=~TBIT; }
 void set_sbit ( void ) { sreg|=SBIT; }
 void clr_sbit ( void ) { sreg&=~SBIT; }
 void set_vbit ( void ) { sreg|=VBIT; }
@@ -161,7 +169,8 @@ unsigned char read_memory ( unsigned short address )
 unsigned short fetch ( unsigned short address )
 {
     unsigned short data;
-    //address&=0xFFFF;
+
+    address&=ROMMASK;
     data=rom[address];
 #ifdef SHOWROM
     printf("fetch [0x%04X] 0x%02X (%u)\n",address,data,data);
@@ -172,7 +181,7 @@ unsigned short fetch ( unsigned short address )
 void reset ( void )
 {
     pc=0;
-    sp=0;
+    sp=0xFFFF;
     sreg=0;
     cycles=0;
     memset(reg,0,sizeof(reg));
@@ -188,6 +197,7 @@ int run_one ( void )
     unsigned int pc_next;
     unsigned int pc_cond;
     unsigned int inst;
+    unsigned int inst2;
     unsigned int ra;
     unsigned int rb;
     unsigned int rc;
@@ -195,6 +205,8 @@ int run_one ( void )
     unsigned int rk;
     unsigned int rr;
 
+
+    pc&=ROMMASK;
     pc_base=pc;
     pc_next=pc+1;
     inst=rom[pc];
@@ -369,6 +381,20 @@ int run_one ( void )
     }
 
 
+    //BCLR
+    if((inst&0xFF8F)==0x9488)
+    {
+        rb=((inst>>4)&0x7);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    bclr %u\n",pc_base,inst,rb);
+#endif
+        sreg&=~(1<<rb);
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
+
     //BLD
     if((inst&0xFE08)==0xF800)
     {
@@ -394,34 +420,168 @@ int run_one ( void )
     }
 
 
-
-
-
-
-
-
-
-
-
-
-    //BRNE
-    if((inst&0xFC07)==0xF401)
+    //BRBC
+    if((inst&0xFC00)==0xF400)
     {
-        rk=(inst>>3)&0x7F;
+        rk=((inst>>3)&0x7F);
         if(rk&0x40) rk|=0xFF80;
-        pc_cond=(pc_base+rk+1)&0x7FFF;
+        pc_cond=(pc_next+rk)&0xFFFF;
+        rb=(inst&0x7);
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    brne 0x%04X ; 0x%04X\n",pc_base,inst,pc_cond,sreg);
+        printf("0x%04X: 0x%04X ......    brbc %u,0x%04X ; ",pc_base,inst,rb,pc_cond);
+        switch(rb)
+        {
+            case  0: printf("CC brcc/brsh"); break;
+            case  1: printf("ZC brne"); break;
+            case  2: printf("NC brpl"); break;
+            case  3: printf("VC brvc"); break;
+            case  4: printf("SC brsc/brge"); break;
+            case  5: printf("HC brhc"); break;
+            case  6: printf("TC brtc"); break;
+            default: printf("IC brid"); break;
+        }
+        printf("\n");
 #endif
-        if((sreg&ZBIT)==0)
+        if(sreg&(1<<rb))
+        {
+        }
+        else
         {
             pc_next=pc_cond;
             cycles+=1;
         }
+
         pc=pc_next;
         cycles+=1;
         return(0);
     }
+
+    //BRBS
+    if((inst&0xFC00)==0xF000)
+    {
+        rk=((inst>>3)&0x7F);
+        if(rk&0x40) rk|=0xFF80;
+        pc_cond=(pc_next+rk)&0xFFFF;
+        rb=(inst&0x7);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    brbs %u,0x%04X ; ",pc_base,inst,rb,pc_cond);
+        switch(rb)
+        {
+            case  0: printf("CS brcs/brlo"); break;
+            case  1: printf("ZS breq"); break;
+            case  2: printf("NS brmi"); break;
+            case  3: printf("VS brvs"); break;
+            case  4: printf("SS brss/brlt"); break;
+            case  5: printf("HS brhs"); break;
+            case  6: printf("TS brts"); break;
+            default: printf("IS brie"); break;
+        }
+        printf("\n");
+
+#endif
+        if(sreg&(1<<rb))
+        {
+            pc_next=pc_cond;
+            cycles+=1;
+        }
+        else
+        {
+        }
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
+
+    //BSET
+    if((inst&0xFF8F)==0x9408)
+    {
+        rb=((inst>>4)&0x7);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    bset %u\n",pc_base,inst,rb);
+#endif
+        sreg|=(1<<rb);
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
+
+    //BST
+    if((inst&0xFE08)==0xFA00)
+    {
+        rd=((inst>>4)&0x1F);
+        rb=(inst&0x7);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    bst r%u,%u\n",pc_base,inst,rd,rb);
+#endif
+        ra=read_register(rd);
+        if(ra&(1<<rb))
+        {
+            set_tbit();
+        }
+        else
+        {
+            clr_tbit();
+        }
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
+
+    //CALL
+    if((inst&0xFE0E)==0x940E)
+    {
+        inst2=fetch(pc_base+1);
+        pc_next=pc+2;
+
+        rk=((inst>>3)&0x3E);
+        rk|=inst&1;
+        rk<<=16;
+        rk|=inst2;
+
+        //address 0x1234 is on the stack as
+        //sp->0x12
+        //sp+1->0x34
+
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X 0x%04X    call 0x%06X\n",pc_base,inst,inst2,rk);
+#endif
+
+        //stack points at first unused
+#ifdef BIGPC
+        write_memory(sp--,(pc_next>>16)&0xFF);
+#endif
+        write_memory(sp--,(pc_next>> 8)&0xFF);
+        write_memory(sp--,(pc_next>> 0)&0xFF);
+
+        pc=rk;
+#ifdef BIGPC
+        cycles+=1;
+#endif
+        cycles+=4;
+        return(0);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -557,7 +717,35 @@ int run_one ( void )
     }
 
 
-    printf("0x%04X: 0x%04X ......    UNDEFINED\n",pc_base,inst);
+
+
+
+
+
+
+
+
+
+
+    //BREAK
+    if(inst==0x9598)
+    {
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    break\n",pc_base,inst);
+#endif
+        cycles+=1;
+        pc=pc_next;
+        return(1);
+    }
+
+
+
+
+
+
+
+
+    printf("0x%04X: 0x%04X 0x%04X    UNDEFINED\n",pc_base,inst,fetch(pc_base+1));
     return(1);
 }
 //-------------------------------------------------------------------
