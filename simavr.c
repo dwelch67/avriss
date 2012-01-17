@@ -11,7 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 //-------------------------------------------------------------------
-unsigned int cycles;
+unsigned long cycles;
+unsigned long fetch_count;
+unsigned long read_count;
+unsigned long write_count;
 unsigned int pc;
 unsigned int sp;
 unsigned int sreg;
@@ -42,20 +45,20 @@ void set_cbit ( void ) { sreg|=CBIT; }
 void set_hbit ( void ) { sreg|=HBIT; }
 void set_ibit ( void ) { sreg|=IBIT; }
 
+//-------------------------------------------------------------------
 void do_sflag ( void )
 {
-    if(sreg&NBIT)
+    switch(sreg&(NBIT|VBIT))
     {
-        if(sreg&VBIT) clr_sbit();
-        else          set_sbit();
-    }
-    else
-    {
-        if(sreg&VBIT) set_sbit();
-        else          clr_sbit();
+        case NBIT:
+        case VBIT:
+            set_sbit();
+            break;
+        default:
+            clr_sbit();
+            break;
     }
 }
-
 //-------------------------------------------------------------------
 void do_cflag ( unsigned int a, unsigned int b, unsigned int c )
 {
@@ -137,6 +140,7 @@ void write_register ( unsigned char r, unsigned char data )
 unsigned char read_register ( unsigned char r )
 {
     unsigned char data;
+
     r&=31;
     data=reg[r];
 #ifdef SHOWREGS
@@ -147,7 +151,8 @@ unsigned char read_register ( unsigned char r )
 //-------------------------------------------------------------------
 void write_memory ( unsigned short address, unsigned char data )
 {
-    //address&=0xFFFF;
+    write_count++;
+    address&=0xFFFF;
 #ifdef SHOWMEM
     printf("write_memory [0x%04X] 0x%02X (%u)\n",address,data,data);
 #endif
@@ -157,7 +162,9 @@ void write_memory ( unsigned short address, unsigned char data )
 unsigned char read_memory ( unsigned short address )
 {
     unsigned char data;
-    //address&=0xFFFF;
+
+    read_count++;
+    address&=0xFFFF;
     data=mem[address];
 #ifdef SHOWMEM
     printf("read_memory  [0x%04X] 0x%02X (%u)\n",address,data,data);
@@ -169,6 +176,7 @@ unsigned short fetch ( unsigned short address )
 {
     unsigned short data;
 
+    fetch_count++;
     address&=ROMMASK;
     data=rom[address];
 #ifdef SHOWROM
@@ -183,8 +191,10 @@ void reset ( void )
     sp=0xFFFF;
     sreg=0;
     cycles=0;
+    fetch_count=0;
+    read_count=0;
+    write_count=0;
     memset(reg,0,sizeof(reg));
-
 }
 //-------------------------------------------------------------------
 //-------------------------------------------------------------------
@@ -209,11 +219,7 @@ int run_one ( void )
     pc&=ROMMASK;
     pc_base=pc;
     pc_next=pc+1;
-    inst=rom[pc];
-
-
-
-
+    inst=fetch(pc);
 
 
     //ADC/ROL
@@ -354,25 +360,50 @@ int run_one ( void )
     }
 
 
-    //AND
+    //AND/TST
     if((inst&0xFC00)==0x2000)
     {
         rd=((inst>>4)&0x1F);
         rr=((inst&0x0200)>>5)|(inst&0x000F);
+        if(rd==rr)
+        {
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    and r%u,r%u\n",pc_base,inst,rd,rr);
+            printf("0x%04X: 0x%04X ......    tst r%u,r%u\n",pc_base,inst,rd,rr);
 #endif
-        ra=read_register(rd);
-        rb=read_register(rr);
-        rc=(ra&rb)&0xFF;
+            ra=read_register(rd);
+            //rb=read_register(rr);
+            rc=(ra&ra)&0xFF;
+            //write_register(rd,rc);
 
-        sreg&=~(SBIT|VBIT|NBIT|ZBIT);
-        //clr_vbit();
-        if(rc&0x80) set_nbit();
-        if(rc==0x00) set_zbit();
-        do_sflag();
+            sreg&=~(SBIT|VBIT|NBIT|ZBIT);
+            //clr_vbit();
+            if(rc&0x80)
+            {
+                set_nbit();
+                set_sbit();
+            }
+            if(rc==0x00) set_zbit();
+        }
+        else
+        {
+#ifdef DISASSEMBLE
+            printf("0x%04X: 0x%04X ......    and r%u,r%u\n",pc_base,inst,rd,rr);
+#endif
+            ra=read_register(rd);
+            rb=read_register(rr);
+            rc=(ra&rb)&0xFF;
+            write_register(rd,rc);
 
-        write_register(rd,rc);
+            sreg&=~(SBIT|VBIT|NBIT|ZBIT);
+            //clr_vbit();
+            if(rc&0x80)
+            {
+                set_nbit();
+                set_sbit();
+            }
+            if(rc==0x00) set_zbit();
+        }
+
         pc=pc_next;
         cycles+=1;
         return(0);
@@ -386,7 +417,7 @@ int run_one ( void )
         rd=16+((inst>>4)&0xF);
         rk=((inst&0x0F00)>>4)|(inst&0x000F);
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    andi r%u,0x%02X ; %u  cbr r%u,0x%02X\n",pc_base,inst,rd,rk,rk,rd,(~rk)&0xFF);
+        printf("0x%04X: 0x%04X ......    andi r%u,0x%02X ; %u\n",pc_base,inst,rd,rk,rk);
 #endif
         ra=read_register(rd);
         rc=(ra&rk)&0xFF;
@@ -1081,7 +1112,7 @@ int run_one ( void )
         cycles+=2;
         return(0);
     }
-    if((inst&0xFE0F)==0x900D)
+    if((inst&0xFE0F)==0x900E)
     {
         rd=(inst>>4)&0x1F;
 #ifdef DISASSEMBLE
@@ -1490,7 +1521,7 @@ int run_one ( void )
         rd=16+((inst>>4)&0xF);
         rk=((inst&0x0F00)>>4)|(inst&0x000F);
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    ori r%u,0x%02X ; %u  cbr r%u,0x%02X\n",pc_base,inst,rd,rk,rk,rd,(~rk)&0xFF);
+        printf("0x%04X: 0x%04X ......    ori r%u,0x%02X ; %u\n",pc_base,inst,rd,rk,rk);
 #endif
         ra=read_register(rd);
         rc=(ra|rk)&0xFF;
@@ -1628,6 +1659,23 @@ int run_one ( void )
         return(0);
     }
 
+    //RJMP
+    if((inst&0xF000)==0xC000)
+    {
+        rk=inst&0xFFF;
+        if(rk&0x800) rk|=0xFFF000;
+        pc_next=(pc_base+rk+1)&ROMMASK;
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    rjmp 0x%04X\n",pc_base,inst,pc_next);
+#endif
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
+
+
+
     //ROR
     if((inst&0xFE0F)==0x9407)
     {
@@ -1712,33 +1760,168 @@ int run_one ( void )
         return(0);
     }
 
+    //SBI
+    if((inst&0xFF00)==0x9A00)
+    {
+        rb=inst&7;
+        ra=(inst>>3)&0x001F;
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    sbi 0x02X,%u\n",pc_base,inst,ra,rb);
+#endif
+        rc=read_memory(0x20+ra);
+        rc|=(1<<rb);
+        write_memory(0x20+ra,rc);
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
 
 
+    //SBIC
+    if((inst&0xFF00)==0x9900)
+    {
+        ra=((inst>>3)&0x1F);
+        rb=(inst&0x0007);
+        pc_cond=pc_base+2;
+        inst2=read_memory(pc_next);
+        if((inst2&0xFE0E)==0x940E) pc_cond+=1; //CALL
+        if((inst2&0xFE0E)==0x940C) pc_cond+=1; //JMP
+        if((inst2&0xFE0F)==0x9000) pc_cond+=1; //LDS
+        if((inst2&0xFE0F)==0x9200) pc_cond+=1; //STS
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    sbic 0x%02X,%u\n",pc_base,inst,ra,rb);
+#endif
+        rc=read_memory(0x20+ra);
+        if((rc&(1<<rb))==0)
+        {
+            pc=pc_cond;
+            cycles+=1;
+            //another cycle if next one is two words. todo
+        }
+        else
+        {
+            pc=pc_next;
+        }
+        cycles+=1;
+        return(0);
+    }
+
+    //SBIS
+    if((inst&0xFF00)==0x9B00)
+    {
+        ra=((inst>>3)&0x1F);
+        rb=(inst&0x0007);
+        pc_cond=pc_base+2;
+        inst2=read_memory(pc_next);
+        if((inst2&0xFE0E)==0x940E) pc_cond+=1; //CALL
+        if((inst2&0xFE0E)==0x940C) pc_cond+=1; //JMP
+        if((inst2&0xFE0F)==0x9000) pc_cond+=1; //LDS
+        if((inst2&0xFE0F)==0x9200) pc_cond+=1; //STS
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    sbis 0x%02X,%u\n",pc_base,inst,ra,rb);
+#endif
+        rc=read_memory(0x20+ra);
+        if(rc&(1<<rb))
+        {
+            pc=pc_cond;
+            cycles+=1;
+            //another cycle if next one is two words. todo
+        }
+        else
+        {
+            pc=pc_next;
+        }
+        cycles+=1;
+        return(0);
+    }
+
+    //SBIW
+    if((inst&0xFF00)==0x9700)
+    {
+        rd=24+((inst>>3)&0x6);
+        rk=((inst&0x00C0)>>2)|(inst&0x000F);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    sbiw r%u:r%u,0x%02X ; %u\n",pc_base,inst,rd+1,rd+0,rk,rk);
+#endif
+        ra=read_register(rd+0);
+        rb=read_register(rd+1);
+        ra|=rb<<8;
+        rc=(ra-rk)&0xFFFF;
+        write_register(rd+0,(rc>>0)&0xFF);
+        write_register(rd+1,(rc>>8)&0xFF);
+
+        sreg&=~(SBIT|VBIT|NBIT|ZBIT|CBIT);
+        do_cflag16(ra,~rk,1);
+        do_vflag16(ra,~rk,1);
+        if(rc&0x8000) set_nbit();
+        if(rc==0x0000) set_zbit();
+        do_sflag();
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
 
 
+    //SBRC
+    if((inst&0xFE08)==0xFC00)
+    {
+        rr=((inst>>4)&0x1F);
+        rb=(inst&0x0007);
+        pc_cond=pc_base+2;
+        inst2=read_memory(pc_next);
+        if((inst2&0xFE0E)==0x940E) pc_cond+=1; //CALL
+        if((inst2&0xFE0E)==0x940C) pc_cond+=1; //JMP
+        if((inst2&0xFE0F)==0x9000) pc_cond+=1; //LDS
+        if((inst2&0xFE0F)==0x9200) pc_cond+=1; //STS
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    sbrc r%u,%u\n",pc_base,inst,rr,rb);
+#endif
+        rc=read_register(rr);
+        if((rr&(1<<rb))==0)
+        {
+            pc=pc_cond;
+            cycles+=1;
+            //another cycle if next one is two words. todo
+        }
+        else
+        {
+            pc=pc_next;
+        }
+        cycles+=1;
+        return(0);
+    }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    //SBRC
+    if((inst&0xFE08)==0xFE00)
+    {
+        rr=((inst>>4)&0x1F);
+        rb=(inst&0x0007);
+        pc_cond=pc_base+2;
+        inst2=read_memory(pc_next);
+        if((inst2&0xFE0E)==0x940E) pc_cond+=1; //CALL
+        if((inst2&0xFE0E)==0x940C) pc_cond+=1; //JMP
+        if((inst2&0xFE0F)==0x9000) pc_cond+=1; //LDS
+        if((inst2&0xFE0F)==0x9200) pc_cond+=1; //STS
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    sbrs r%u,%u\n",pc_base,inst,rr,rb);
+#endif
+        rc=read_register(rr);
+        if(rr&(1<<rb))
+        {
+            pc=pc_cond;
+            cycles+=1;
+            //another cycle if next one is two words. todo
+        }
+        else
+        {
+            pc=pc_next;
+        }
+        cycles+=1;
+        return(0);
+    }
 
     //SLEEP
     if(inst==0x9588)
@@ -1752,7 +1935,331 @@ int run_one ( void )
         return(1);
     }
 
+    //spm
+    if(inst==0x95E8)
+    {
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    spm\n",pc_base,inst);
+#endif
+        printf("spm not implemented\n");
+        return(1);
+    }
+    if(inst==0x95F8)
+    {
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    spm\n",pc_base,inst);
+#endif
+        printf("spm not implemented\n");
+        return(1);
+    }
 
+    //STx
+    if((inst&0xFE0F)==0x920C)
+    {
+        rd=(inst>>4)&0x1F;
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    st x,r%u\n",pc_base,inst,rd);
+#endif
+        ra=read_register(26);
+        rb=read_register(27);
+        rk=(rb<<8)|ra;
+        rc=read_register(rd);
+        write_memory(rk,rc);
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
+    if((inst&0xFE0F)==0x920D)
+    {
+        rd=(inst>>4)&0x1F;
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    st x+,r%u\n",pc_base,inst,rd);
+#endif
+        ra=read_register(26);
+        rb=read_register(27);
+        rk=(rb<<8)|ra;
+        rc=read_register(rd);
+        write_memory(rk,rc);
+        rk=rk+1;
+        write_register(26,(rk>>0)&0xFF);
+        write_register(27,(rk>>8)&0xFF);
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
+    if((inst&0xFE0F)==0x920E)
+    {
+        rd=(inst>>4)&0x1F;
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    st -x,r%u\n",pc_base,inst,rd);
+#endif
+        ra=read_register(26);
+        rb=read_register(27);
+        rk=(rb<<8)|ra;
+        rk=rk-1;
+        rc=read_register(rd);
+        write_memory(rk,rc);
+        write_register(26,(rk>>0)&0xFF);
+        write_register(27,(rk>>8)&0xFF);
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
+
+
+
+    //STy
+    if((inst&0xFE0F)==0x8208)
+    {
+        rd=(inst>>4)&0x1F;
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    st y,r%u\n",pc_base,inst,rd);
+#endif
+        ra=read_register(28);
+        rb=read_register(29);
+        rk=(rb<<8)|ra;
+        rc=read_register(rd);
+        write_memory(rk,rc);
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
+    if((inst&0xFE0F)==0x9209)
+    {
+        rd=(inst>>4)&0x1F;
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    st y+,r%u\n",pc_base,inst,rd);
+#endif
+        ra=read_register(28);
+        rb=read_register(29);
+        rk=(rb<<8)|ra;
+        rc=read_register(rd);
+        write_memory(rk,rc);
+        rk=rk+1;
+        write_register(28,(rk>>0)&0xFF);
+        write_register(29,(rk>>8)&0xFF);
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
+    if((inst&0xFE0F)==0x920A)
+    {
+        rd=(inst>>4)&0x1F;
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    st -y,r%u\n",pc_base,inst,rd);
+#endif
+        ra=read_register(28);
+        rb=read_register(29);
+        rk=(rb<<8)|ra;
+        rk=rk-1;
+        rc=read_register(rd);
+        write_memory(rk,rc);
+        write_register(28,(rk>>0)&0xFF);
+        write_register(29,(rk>>8)&0xFF);
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
+
+
+
+    //STz
+    if((inst&0xFE0F)==0x8200)
+    {
+        rd=(inst>>4)&0x1F;
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    st z,r%u\n",pc_base,inst,rd);
+#endif
+        ra=read_register(30);
+        rb=read_register(31);
+        rk=(rb<<8)|ra;
+        rc=read_register(rd);
+        write_memory(rk,rc);
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
+    if((inst&0xFE0F)==0x9201)
+    {
+        rd=(inst>>4)&0x1F;
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    st z+,r%u\n",pc_base,inst,rd);
+#endif
+        ra=read_register(30);
+        rb=read_register(31);
+        rk=(rb<<8)|ra;
+        rc=read_register(rd);
+        write_memory(rk,rc);
+        rk=rk+1;
+        write_register(30,(rk>>0)&0xFF);
+        write_register(31,(rk>>8)&0xFF);
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
+    if((inst&0xFE0F)==0x9202)
+    {
+        rd=(inst>>4)&0x1F;
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    st -z,r%u\n",pc_base,inst,rd);
+#endif
+        ra=read_register(30);
+        rb=read_register(31);
+        rk=(rb<<8)|ra;
+        rk=rk-1;
+        rc=read_register(rd);
+        write_memory(rk,rc);
+        write_register(30,(rk>>0)&0xFF);
+        write_register(31,(rk>>8)&0xFF);
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
+
+
+    //STS
+    if((inst&0xFE0F)==0x9200)
+    {
+        inst2=fetch(pc_base+1);
+        pc_next=pc+2;
+        rd=((inst>>4)&0x1F);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    sts 0x%04x,r%u ; %u\n",pc_base,inst,rk,rd,rk);
+#endif
+        rc=read_register(rd);
+        write_memory(rk,rc);
+
+        pc=pc_next;
+        cycles+=2;
+        return(0);
+    }
+
+    //STS
+    if((inst&0xF800)==0xA800)
+    {
+        rd=16+((inst>>4)&0xF);
+        rk=((inst&0x0700)>>4)|(inst&0xF);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    sts 0x%02X,r%u ; %u\n",pc_base,inst,rk,rd,rk);
+#endif
+        rc=read_register(rd);
+        write_memory(rk,rc);
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
+
+    //SUB
+    if((inst&0xFC00)==0x1800)
+    {
+        rd=((inst>>4)&0x1F);
+        rr=((inst&0x0200)>>5)|(inst&0x000F);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    sub r%u,r%u\n",pc_base,inst,rd,rr);
+#endif
+        ra=read_register(rd);
+        rb=read_register(rr);
+        rc=(ra-rb)&0xFF;
+        write_register(rd,rc);
+
+        sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
+        do_hflag(ra,~rb,1);
+        do_cflag(ra,~rb,1);
+        do_vflag(ra,~rb,1);
+        if(rc&0x80) set_nbit();
+        if(rc==0x00) set_zbit();
+        do_sflag();
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
+
+
+    //SUBI
+    if((inst&0xF000)==0x5000)
+    {
+        rd=16+((inst>>4)&0xF);
+        rk=((inst&0x0F00)>>4)|(inst&0x000F);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    subi r%u,0x%02X ; %u\n",pc_base,inst,rd,rk,rk);
+#endif
+        ra=read_register(rd);
+        rc=(ra-rk)&0xFF;
+        write_register(rd,rc);
+
+        sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
+        do_hflag(ra,~rk,1);
+        do_cflag(ra,~rk,1);
+        do_vflag(ra,~rk,1);
+        if(rc&0x80) set_nbit();
+        if(rc==0x00) set_zbit();
+        do_sflag();
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
+
+
+    //SWAP
+    if((inst&0xFE0F)==0x9402)
+    {
+        rd=((inst>>4)&0x1F);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    swap r%u\n",pc_base,inst,rd);
+#endif
+        ra=read_register(rd);
+        rc=((ra<<4)|(ra>>4))&0xFF;
+        write_register(rd,rc);
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
+
+    //WDR
+    if(inst==0x9558)
+    {
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    wdr\n",pc_base,inst);
+#endif
+        printf("watchdog timer not implemented, todo\n");
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
+
+    //XCH
+    if((inst&0xFE0F)==0x9204)
+    {
+        rd=((inst>>4)&0x1F);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    xch z,r%u\n",pc_base,inst,rd);
+#endif
+        ra=read_register(30);
+        rb=read_register(31);
+        rc=read_register(rd);
+        rk=(rb<<8)|ra;
+        rb=read_memory(rk);
+        write_memory(rk,rc);
+        write_register(rd,rb);
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
 
 
 
@@ -1961,7 +2468,7 @@ unsigned char t;
 int main ( int argc, char *argv[] )
 {
     FILE *fp;
-unsigned int ra;
+//unsigned int ra;
 
     if(argc<2)
     {
@@ -1978,17 +2485,17 @@ unsigned int ra;
 
 
     reset();
-
     //for(ra=0;ra<20;ra++)
     while(1)
     {
         if(run_one()) break;
     }
 
-
-
-
-
+    printf("cycles %lu\n",cycles);
+    printf("fetch_count %lu\n",fetch_count);
+    printf("read_count %lu\n",read_count);
+    printf("write_count %lu\n",write_count);
+    printf("read/write %lu\n",read_count+write_count);
 
     return(0);
 }
