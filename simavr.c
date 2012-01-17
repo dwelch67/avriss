@@ -226,6 +226,7 @@ int run_one ( void )
         rb=read_register(rr);
         if(sreg&CBIT) rk=1; else rk=0;
         rc=(ra+rb+rk)&0xFF;
+        write_register(rd,rc);
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
         do_hflag(ra,rb,rk);
@@ -235,7 +236,6 @@ int run_one ( void )
         if(rc==0x00) set_zbit();
         do_sflag();
 
-        write_register(rd,rc);
         pc=pc_next;
         cycles+=1;
         return(0);
@@ -1392,26 +1392,95 @@ int run_one ( void )
         return(1);
     }
 
+    //NEG
+    if((inst&0xFE0F)==0x9401)
+    {
+        rd=((inst>>4)&0x1F);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    neg r%u\n",pc_base,inst,rd);
+#endif
+        rb=read_register(rd);
+        rc=(0-rb)&0xFF;
+        write_register(rd,rc);
 
+        sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
+        do_hflag(0,~rb,1);
+        do_cflag(0,~rb,1);
+        do_vflag(0,~rb,1);
+        if(rc&0x80) set_nbit();
+        if(rc==0x00) set_zbit();
+        do_sflag();
 
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
 
+    //NOP
+    if(inst==0x0000)
+    {
+        rd=((inst>>4)&0x1F);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    nop r%u\n",pc_base,inst,rd);
+#endif
 
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
 
+    //OR
+    if((inst&0xFC00)==0x2800)
+    {
+        rd=((inst>>4)&0x1F);
+        rr=((inst&0x0200)>>5)|(inst&0x000F);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    or r%u,r%u\n",pc_base,inst,rd,rr);
+#endif
+        ra=read_register(rd);
+        rb=read_register(rr);
+        rc=(ra|rb)&0xFF;
+        write_register(rd,rc);
 
+        sreg&=~(SBIT|VBIT|NBIT|ZBIT);
+        //clr_vbit();
+        if(rc&0x80)
+        {
+            set_nbit();
+            set_sbit();
+        }
+        if(rc==0x00) set_zbit();
 
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
 
+    //ORI
+    if((inst&0xF000)==0x6000)
+    {
+        rd=16+((inst>>4)&0xF);
+        rk=((inst&0x0F00)>>4)|(inst&0x000F);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    ori r%u,0x%02X ; %u  cbr r%u,0x%02X\n",pc_base,inst,rd,rk,rk,rd,(~rk)&0xFF);
+#endif
+        ra=read_register(rd);
+        rc=(ra|rk)&0xFF;
 
+        sreg&=~(SBIT|VBIT|NBIT|ZBIT);
+        //clr_vbit();
+        if(rc&0x80)
+        {
+            set_nbit();
+            set_sbit();
+        }
+        if(rc==0x00) set_zbit();
 
-
-
-
-
-
-
-
-
-
-
+        write_register(rd,rc);
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
 
     //OUT
     if((inst&0xF800)==0xB800)
@@ -1427,6 +1496,31 @@ int run_one ( void )
         cycles+=1;
         return(0);
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     //RJMP
