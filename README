@@ -1,6 +1,37 @@
 
+simavr - avr instruction set simulator
 
-avr instruction set simulator
+This is very lightly tested at the moment, expecting to find some bugs.
 
-This is a work in progress, check back later
+This is a very simple and straight forward, easy to read, avr instruction
+set simulator.  Focusing on the non-xmega avr instructions and mostly
+the 16 bit program counter (vs the 22 bit program counter, but there
+is some support for the 22 bit program counter).
 
+There is a cycle counter but no guarantees on accuracy vs hardware.
+Likewise instruction fetch, memio read/write counters, again no
+guarantee on accuracy vs hardware.
+
+The input is intel hex files, there are some defines in the code
+(simavr.c) that you can comment/uncomment to see more about what is
+going on with your program.  Disassembly mode is not a bad way to run
+if it is not too slow, it shows instructions in execution order.
+Register and memio read/writes and instruction fetches go through a
+common set of functions so you can add peripherals or watches or traps
+if you choose to add something to monitor your code while it executes.
+
+The various avr devices have different memory maps, the tiny for example
+appears to only map the upper 16 registers in the lower 16 data memory
+locations but others have all 32 registers mapped into data memory space.
+This simulation has all 32 registers in the lower data memory space
+0x0000 to 0x001F, then 64 I/O locations starting at 0x20 of which only
+a few are implemented SREG, SPH, and SPL.  Others locations may follow,
+the intention here is to NOT get into a large project that handles
+all the nuances of the various implementations.  The intent is to make
+an instruction set simulator for learning the instruction set for free
+and with visibility into what is going on.  If necessary a single
+average avr chip will be targeted and its I/O ports will be implemented.
+Being open source and hopefully very easy to read and add code to you
+are of course welcome to fork this and add whatever features you want.
+
+Please provide feedback if you find bugs.

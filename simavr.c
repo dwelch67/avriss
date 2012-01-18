@@ -7,6 +7,11 @@
 #define DISASSEMBLE
 //#define BIGPC
 //-------------------------------------------------------------------
+// use data memory based address I/O address + 0x20
+#define SPL  (0x3D+0x20)
+#define SPH  (0x3E+0x20)
+#define SREG (0x3F+0x20)
+//-------------------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,7 +49,6 @@ void set_zbit ( void ) { sreg|=ZBIT; }
 void set_cbit ( void ) { sreg|=CBIT; }
 void set_hbit ( void ) { sreg|=HBIT; }
 void set_ibit ( void ) { sreg|=IBIT; }
-
 //-------------------------------------------------------------------
 void do_sflag ( void )
 {
@@ -156,7 +160,43 @@ void write_memory ( unsigned short address, unsigned char data )
 #ifdef SHOWMEM
     printf("write_memory [0x%04X] 0x%02X (%u)\n",address,data,data);
 #endif
-    mem[address]=data;
+
+    if(address<0x20)
+    {
+        write_register(address,data);
+    }
+    else if(address<0x60)
+    {
+        switch(address)
+        {
+            case SREG:
+            {
+                sreg=data;
+                break;
+            }
+            case SPH:
+            {
+                sp&=0x00FF;
+                sp|=((unsigned short)data)<<8;
+                break;
+            }
+            case SPL:
+            {
+                sp&=0xFF00;
+                sp|=data;
+                break;
+            }
+            default:
+            {
+                mem[address]=data;
+                break;
+            }
+        }
+    }
+    else
+    {
+        mem[address]=data;
+    }
 }
 //-------------------------------------------------------------------
 unsigned char read_memory ( unsigned short address )
@@ -165,7 +205,40 @@ unsigned char read_memory ( unsigned short address )
 
     read_count++;
     address&=0xFFFF;
-    data=mem[address];
+    if(address<0x20)
+    {
+        data=read_register(address);
+    }
+    else if(address<0x60)
+    {
+        switch(address)
+        {
+            case SREG:
+            {
+                data=sreg;
+                break;
+            }
+            case SPH:
+            {
+                data=(sp>>8)&0xFF;
+                break;
+            }
+            case SPL:
+            {
+                data=sp&0xFF;
+                break;
+            }
+            default:
+            {
+                data=mem[address];
+                break;
+            }
+        }
+    }
+    else
+    {
+        data=mem[address];
+    }
 #ifdef SHOWMEM
     printf("read_memory  [0x%04X] 0x%02X (%u)\n",address,data,data);
 #endif
