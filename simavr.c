@@ -222,7 +222,8 @@ int run_one ( void )
     inst=fetch(pc);
 
 
-    //ADC/ROL
+    //ADC pattern 0001 11rd dddd rrrr
+    //ROL pattern 0001 11dd dddd dddd
     if((inst&0xFC00)==0x1C00)
     {
         rd=((inst>>4)&0x1F);
@@ -275,7 +276,8 @@ int run_one ( void )
         return(0);
     }
 
-    //ADD/LSL
+    //ADD pattern 0000 11rd dddd rrrr
+    //LSL pattern 0000 11dd dddd dddd
     if((inst&0xFC00)==0x0C00)
     {
         rd=((inst>>4)&0x1F);
@@ -329,9 +331,7 @@ int run_one ( void )
         return(0);
     }
 
-
-
-    //ADIW
+    //ADIW pattern 1001 0110 kkdd kkkk
     if((inst&0xFF00)==0x9600)
     {
         rd=24+((inst>>3)&0x6);
@@ -360,7 +360,8 @@ int run_one ( void )
     }
 
 
-    //AND/TST
+    //AND pattern 0010 00rd dddd rrrr
+    //TST pattern 0010 00dd dddd dddd
     if((inst&0xFC00)==0x2000)
     {
         rd=((inst>>4)&0x1F);
@@ -411,7 +412,8 @@ int run_one ( void )
 
 
 
-    //ANDI
+    //ANDI pattern 0111 kkkk dddd kkkk
+    //CBR pattern 0111 kkkk dddd kkkk
     if((inst&0xF000)==0x7000)
     {
         rd=16+((inst>>4)&0xF);
@@ -424,9 +426,12 @@ int run_one ( void )
 
         sreg&=~(SBIT|VBIT|NBIT|ZBIT);
         //clr_vbit();
-        if(rc&0x80) set_nbit();
+        if(rc&0x80)
+        {
+            set_nbit();
+            set_sbit();
+        }
         if(rc==0x00) set_zbit();
-        do_sflag();
 
         write_register(rd,rc);
         pc=pc_next;
@@ -434,7 +439,7 @@ int run_one ( void )
         return(0);
     }
 
-    //ASR
+    //ASR pattern 1001 010d dddd 0101
     if((inst&0xFE0F)==0x9405)
     {
         rd=((inst>>4)&0x1F);
@@ -464,7 +469,15 @@ int run_one ( void )
     }
 
 
-    //BCLR
+    //BCLR pattern 1001 0100 1sss 1000
+    //CLC  pattern 1001 0100 1000 1000
+    //CLH  pattern 1001 0100 1101 1000
+    //CLI  pattern 1001 0100 1111 1000
+    //CLN  pattern 1001 0100 1010 1000
+    //CLS  pattern 1001 0100 1100 1000
+    //CLT  pattern 1001 0100 1110 1000
+    //CLV  pattern 1001 0100 1011 1000
+    //CLZ  pattern 1001 0100 1001 1000
     if((inst&0xFF8F)==0x9488)
     {
         rb=((inst>>4)&0x7);
@@ -490,7 +503,7 @@ int run_one ( void )
         return(0);
     }
 
-    //BLD
+    //BLD pattern 1111 100d dddd 0bbb
     if((inst&0xFE08)==0xF800)
     {
         rd=((inst>>4)&0x1F);
@@ -515,7 +528,16 @@ int run_one ( void )
     }
 
 
-    //BRBC
+    //BRBC pattern 1111 01kk kkkk ksss
+    //BRCC pattern 1111 01kk kkkk k000
+    //BRGE pattern 1111 01kk kkkk k100
+    //BRHC pattern 1111 01kk kkkk k101
+    //BRID pattern 1111 01kk kkkk k111
+    //BRNE pattern 1111 01kk kkkk k001
+    //BRPL pattern 1111 01kk kkkk k010
+    //BRSH pattern 1111 01kk kkkk k000
+    //BRTC pattern 1111 01kk kkkk k110
+    //BRVC pattern 1111 01kk kkkk k011
     if((inst&0xFC00)==0xF400)
     {
         rk=((inst>>3)&0x7F);
@@ -551,7 +573,16 @@ int run_one ( void )
         return(0);
     }
 
-    //BRBS
+    //BRBS pattern 1111 00kk kkkk ksss
+    //BRCS pattern 1111 00kk kkkk k000
+    //BREQ pattern 1111 00kk kkkk k001
+    //BRHC pattern 1111 00kk kkkk k101
+    //BRIE pattern 1111 00kk kkkk k111
+    //BRLO pattern 1111 00kk kkkk k000
+    //BRLT pattern 1111 00kk kkkk k100
+    //BRMI pattern 1111 00kk kkkk k010
+    //BRTS pattern 1111 00kk kkkk k110
+    //BRVS pattern 1111 00kk kkkk k011
     if((inst&0xFC00)==0xF000)
     {
         rk=((inst>>3)&0x7F);
@@ -588,7 +619,7 @@ int run_one ( void )
         return(0);
     }
 
-    //BSET
+    //BSET pattern 1001 0100 0sss 1000
     if((inst&0xFF8F)==0x9408)
     {
         rb=((inst>>4)&0x7);
@@ -614,7 +645,7 @@ int run_one ( void )
         return(0);
     }
 
-    //BST
+    //BST pattern 1111 101d dddd 0bbb
     if((inst&0xFE08)==0xFA00)
     {
         rd=((inst>>4)&0x1F);
@@ -637,7 +668,7 @@ int run_one ( void )
         return(0);
     }
 
-    //CALL
+    //CALL pattern 1001 010k kkkk 111k kkkk kkkk kkkk kkkk
     if((inst&0xFE0E)==0x940E)
     {
         inst2=fetch(pc_base+1);
@@ -671,7 +702,7 @@ int run_one ( void )
         return(0);
     }
 
-    //CBI
+    //CBI pattern 1001 1000 aaaa abbb
     if((inst&0xFF00)==0x9800)
     {
         ra=((inst>>3)&0x1F);
@@ -689,7 +720,7 @@ int run_one ( void )
         return(0);
     }
 
-    //COM
+    //COM  pattern 1001 010d dddd 0000
     if((inst&0xFE0F)==0x9400)
     {
         rd=((inst>>4)&0x1F);
@@ -712,7 +743,7 @@ int run_one ( void )
         return(0);
     }
 
-    //CP
+    //CP   pattern 0001 01rd dddd rrrr
     if((inst&0xFC00)==0x1400)
     {
         rd=((inst>>4)&0x1F);
@@ -737,7 +768,7 @@ int run_one ( void )
         return(0);
     }
 
-    //CPC
+    //CPC  pattern 0000 01rd dddd rrrr
     if((inst&0xFC00)==0x0400)
     {
         rd=((inst>>4)&0x1F);
@@ -763,7 +794,7 @@ int run_one ( void )
         return(0);
     }
 
-    //CPI
+    //CPI  pattern 0011 kkkk dddd kkkk
     if((inst&0xF000)==0x3000)
     {
         rk=((inst&0x0F00)>>4)|(inst&0x000F);
@@ -787,7 +818,7 @@ int run_one ( void )
         return(0);
     }
 
-    //CPSE
+    //CPSE pattern 0001 00rd dddd rrrr
     if((inst&0xFC00)==0x1000)
     {
         rd=((inst>>4)&0x1F);
@@ -807,6 +838,7 @@ int run_one ( void )
         if(ra==rb)
         {
             pc=pc_cond;
+            cycles+=1;
         }
         else
         {
@@ -817,7 +849,7 @@ int run_one ( void )
     }
 
 
-    //DEC
+    //DEC  pattern 1001 010d dddd 1010
     if((inst&0xFE0F)==0x940A)
     {
         rd=((inst>>4)&0x1F);
@@ -839,14 +871,14 @@ int run_one ( void )
         return(0);
     }
 
-    //DES
+    //DES  pattern 1001 0100 kkkk 1011
     if((inst&0xFF0F)==0x940B)
     {
         printf("DES NOT SUPPORTED\n");
         return(1);
     }
 
-    //EICALL
+    //EICALL pattern 1001 0101 0001 1001
     if(inst==0x9519)
     {
         //looks like BIGPC only 22 bit pc
@@ -854,7 +886,7 @@ int run_one ( void )
         return(1);
     }
 
-    //EIJMP
+    //EIJMP pattern 1001 0100 0001 1001
     if(inst==0x9419)
     {
         //looks like BIGPC only 22 bit pc
@@ -862,7 +894,9 @@ int run_one ( void )
         return(1);
     }
 
-    //ELPM
+    //ELPM pattern 1001 0101 1101 1000
+    //ELPM pattern 1001 000d dddd 0110
+    //ELPM pattern 1001 000d dddd 0111
     if(inst==0x95D8)
     {
         //looks like xmega RAMP
@@ -882,17 +916,26 @@ int run_one ( void )
         return(1);
     }
 
-    //EOR
+    //EOR  pattern 0010 01rd dddd rrrr
+    //CLR  pattern 0010 01dd dddd dddd
     if((inst&0xFC00)==0x2400)
     {
         rd=((inst>>4)&0x1F);
         rr=((inst&0x0200)>>5)|(inst&0x000F);
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    eor r%u,r%u\n",pc_base,inst,rd,rr);
+        if(rd==rr)
+        {
+            printf("0x%04X: 0x%04X ......    clr r%u\n",pc_base,inst,rd);
+        }
+        else
+        {
+            printf("0x%04X: 0x%04X ......    eor r%u,r%u\n",pc_base,inst,rd,rr);
+        }
 #endif
         ra=read_register(rd);
         rb=read_register(rr);
         rc=(ra^rb)&0xFF;
+        write_register(rd,rc);
 
         sreg&=~(SBIT|VBIT|NBIT|ZBIT);
         //clr_vbit();
@@ -900,13 +943,10 @@ int run_one ( void )
         do_sflag();
         if(rc==0x00) set_zbit();
 
-        write_register(rd,rc);
         pc=pc_next;
         cycles+=1;
         return(0);
     }
-
-
 
     //FMUL
     if((inst&0xFF88)==0x0308)
@@ -1537,7 +1577,7 @@ int run_one ( void )
 
         write_register(rd,rc);
         pc=pc_next;
-        cycles+=2;
+        cycles+=1;
         return(0);
     }
 
@@ -1567,7 +1607,7 @@ int run_one ( void )
         write_register(rd,rc);
 
         pc=pc_next;
-        cycles+=1;
+        cycles+=2;
         return(0);
     }
 
@@ -1735,7 +1775,7 @@ int run_one ( void )
     }
 
     //SBCI
-    if((inst&0xFC00)==0x0800)
+    if((inst&0xF000)==0x4000)
     {
         rd=16+((inst>>4)&0xF);
         rb=((inst&0x0F00)>>4)|(inst&0x000F);
@@ -1894,7 +1934,7 @@ int run_one ( void )
     }
 
 
-    //SBRC
+    //SBRS
     if((inst&0xFE08)==0xFE00)
     {
         rr=((inst>>4)&0x1F);
@@ -2025,7 +2065,7 @@ int run_one ( void )
         write_memory(rk,rc);
 
         pc=pc_next;
-        cycles+=2;
+        cycles+=1;
         return(0);
     }
     if((inst&0xFE0F)==0x9209)
@@ -2044,7 +2084,7 @@ int run_one ( void )
         write_register(29,(rk>>8)&0xFF);
 
         pc=pc_next;
-        cycles+=2;
+        cycles+=1;
         return(0);
     }
     if((inst&0xFE0F)==0x920A)
@@ -2229,7 +2269,7 @@ int run_one ( void )
     }
 
     //WDR
-    if(inst==0x9558)
+    if(inst==0x95A8)
     {
 #ifdef DISASSEMBLE
         printf("0x%04X: 0x%04X ......    wdr\n",pc_base,inst);
