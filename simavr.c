@@ -5,12 +5,14 @@
 //#define SHOWMEM
 //#define SHOWROM
 #define DISASSEMBLE
-//#define BIGPC
 //-------------------------------------------------------------------
 // use data memory based address I/O address + 0x20
 #define SPL  (0x3D + 0x20)
 #define SPH  (0x3E + 0x20)
 #define SREG (0x3F + 0x20)
+
+#define SHOW 0x2F
+
 //-------------------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,11 +35,7 @@ unsigned int sreg;
 #define IBIT (1<<7)
 unsigned char reg[32];
 unsigned char mem[0x10000];
-#ifdef BIGPC
-#define ROMMASK 0x3FFFFF
-#else
 #define ROMMASK 0x00FFFF
-#endif
 unsigned short rom[ROMMASK+1];
 void set_tbit ( void ) { sreg|=TBIT; }
 void clr_tbit ( void ) { sreg&=~TBIT; }
@@ -196,6 +194,17 @@ void write_memory ( unsigned short address, unsigned char data )
                 sp|=data;
                 break;
             }
+            //case UDR0:
+            //{
+                //if((data>=0x20)&&(data<0x7F)) printf("%c",data);
+                //else printf("[0x%02X]",data);
+                //break;
+            //}
+            case SHOW:
+            {
+                printf("show: 0x%02X\n",data);
+                break;
+            }
             default:
             {
                 mem[address]=data;
@@ -238,6 +247,11 @@ unsigned char read_memory ( unsigned short address )
                 data=sp&0xFF;
                 break;
             }
+            //case UCSR0A:
+            //{
+                //data=0x20; //tx buffer always empty
+                //break;
+            //}
             default:
             {
                 data=mem[address];
@@ -761,35 +775,31 @@ int run_one ( void )
 
     //CALL pattern 1001 0100 0000 1110 kkkk kkkk kkkk kkkk 16 bit pc?
     //CALL pattern 1001 010k kkkk 111k kkkk kkkk kkkk kkkk
-    if((inst&0xFE0E)==0x940E)
+//    if((inst&0xFE0E)==0x940E)
+    if(inst==0x940E)
     {
         inst2=fetch(pc_base+1);
         pc_next=pc+2;
 
-        rk=((inst>>3)&0x3E);
-        rk|=inst&1;
-        rk<<=16;
-        rk|=inst2;
+        //rk=((inst>>3)&0x3E);
+        //rk|=inst&1;
+        //rk<<=16;
+        //rk|=inst2;
+        rk=inst2;
 
         //address 0x1234 is on the stack as
         //sp->0x12
         //sp+1->0x34
 
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X 0x%04X    call 0x%06X\n",pc_base,inst,inst2,rk);
+        printf("0x%04X: 0x%04X 0x%04X    call 0x%04X\n",pc_base,inst,inst2,rk);
 #endif
 
         //stack points at first unused
-#ifdef BIGPC
-        write_memory(sp--,(pc_next>>16)&0xFF);
-#endif
         write_memory(sp--,(pc_next>> 8)&0xFF);
         write_memory(sp--,(pc_next>> 0)&0xFF);
 
         pc=rk;
-#ifdef BIGPC
-        cycles+=1;
-#endif
         cycles+=4;
         return(0);
     }
@@ -971,16 +981,14 @@ int run_one ( void )
     //EICALL pattern 1001 0101 0001 1001
     if(inst==0x9519)
     {
-        //looks like BIGPC only 22 bit pc
-        printf("EICALL NOT SUPPORTED (todo)\n");
+        printf("EICALL NOT SUPPORTED\n");
         return(1);
     }
 
     //EIJMP pattern 1001 0100 0001 1001
     if(inst==0x9419)
     {
-        //looks like BIGPC only 22 bit pc
-        printf("EIJMP NOT SUPPORTED (todo)\n");
+        printf("EIJMP NOT SUPPORTED\n");
         return(1);
     }
 
@@ -989,19 +997,16 @@ int run_one ( void )
     //ELPM pattern 1001 000d dddd 0111
     if(inst==0x95D8)
     {
-        //looks like xmega RAMP
         printf("ELPM NOT SUPPORTED\n");
         return(1);
     }
     if((inst&0xFE0F)==0x9006)
     {
-        //looks like xmega RAMP
         printf("ELPM NOT SUPPORTED\n");
         return(1);
     }
     if((inst&0xFE0F)==0x9007)
     {
-        //looks like xmega RAMP
         printf("ELPM NOT SUPPORTED\n");
         return(1);
     }
@@ -1085,17 +1090,10 @@ int run_one ( void )
         pc_cond=(rb<<8)|ra;
 
         //stack points at first unused
-#ifdef BIGPC
-        //upper bits zero
-        write_memory(sp--,(pc_next>>16)&0xFF);
-#endif
         write_memory(sp--,(pc_next>> 8)&0xFF);
         write_memory(sp--,(pc_next>> 0)&0xFF);
 
         pc=pc_cond;
-#ifdef BIGPC
-        cycles+=1;
-#endif
         cycles+=3;
         return(0);
     }
@@ -1619,9 +1617,8 @@ int run_one ( void )
     //NOP  pattern 0000 0000 0000 0000
     if(inst==0x0000)
     {
-        rd=((inst>>4)&0x1F);
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    nop r%u\n",pc_base,inst,rd);
+        printf("0x%04X: 0x%04X ......    nop\n",pc_base,inst);
 #endif
 
         pc=pc_next;
@@ -1740,16 +1737,10 @@ int run_one ( void )
 #endif
 
         //stack points at first unused
-#ifdef BIGPC
-        write_memory(sp--,(pc_next>>16)&0xFF);
-#endif
         write_memory(sp--,(pc_next>> 8)&0xFF);
         write_memory(sp--,(pc_next>> 0)&0xFF);
 
         pc=pc_cond;
-#ifdef BIGPC
-        cycles+=1;
-#endif
         cycles+=3;
         return(0);
     }
@@ -1762,17 +1753,13 @@ int run_one ( void )
 #endif
 
         //stack points at first unused
-        pc_next=0;
-#ifdef BIGPC
-        pc_next<<=8; pc_next|=read_memory(++sp);
-#endif
-        pc_next<<=8; pc_next|=read_memory(++sp);
-        pc_next<<=8; pc_next|=read_memory(++sp);
+
+        ra=read_memory(++sp);
+        rb=read_memory(++sp);
+        pc_next=(rb<<8)|(ra<<0);
+
 
         pc=pc_next;
-#ifdef BIGPC
-        cycles+=1;
-#endif
         cycles+=4;
         return(0);
     }
@@ -1784,19 +1771,14 @@ int run_one ( void )
         printf("0x%04X: 0x%04X ......    reti\n",pc_base,inst);
 #endif
 
-        //stack points at first unused
-        pc_next=0;
-#ifdef BIGPC
-        pc_next<<=8; pc_next|=read_memory(++sp);
-#endif
-        pc_next<<=8; pc_next|=read_memory(++sp);
-        pc_next<<=8; pc_next|=read_memory(++sp);
         set_ibit();
 
+        //stack points at first unused
+        ra=read_memory(++sp);
+        rb=read_memory(++sp);
+        pc_next=(rb<<8)|(ra<<0);
+
         pc=pc_next;
-#ifdef BIGPC
-        cycles+=1;
-#endif
         cycles+=4;
         return(0);
     }
@@ -2266,8 +2248,9 @@ int run_one ( void )
         inst2=fetch(pc_base+1);
         pc_next=pc+2;
         rd=((inst>>4)&0x1F);
+        rk=inst2;
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    sts 0x%04x,r%u ; %u\n",pc_base,inst,rk,rd,rk);
+        printf("0x%04X: 0x%04X 0x%04X    sts 0x%04x,r%u ; %u\n",pc_base,inst,inst2,rk,rd,rk);
 #endif
         rc=read_register(rd);
         write_memory(rk,rc);
@@ -2616,13 +2599,14 @@ int main ( int argc, char *argv[] )
     if(readhex(fp)) return(1);
 
 
+    printf("--------------------\n");
     reset();
     //for(ra=0;ra<20;ra++)
     while(1)
     {
         if(run_one()) break;
     }
-
+    printf("--------------------\n");
     printf("cycles %lu\n",cycles);
     printf("fetch_count %lu\n",fetch_count);
     printf("read_count %lu\n",read_count);

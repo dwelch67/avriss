@@ -4,9 +4,8 @@ simavr - avr instruction set simulator
 This is very lightly tested at the moment, expecting to find some bugs.
 
 This is a very simple and straight forward, easy to read, avr instruction
-set simulator.  Focusing on the non-xmega avr instructions and mostly
-the 16 bit program counter (vs the 22 bit program counter, but there
-is some support for the 22 bit program counter).
+set simulator.  Focusing on the non-xmega avr instructions and a 16
+bit program counter.
 
 There is a cycle counter but no guarantees on accuracy vs hardware.
 Likewise instruction fetch, memio read/write counters, again no
