@@ -8,9 +8,9 @@
 //#define BIGPC
 //-------------------------------------------------------------------
 // use data memory based address I/O address + 0x20
-#define SPL  (0x3D+0x20)
-#define SPH  (0x3E+0x20)
-#define SREG (0x3F+0x20)
+#define SPL  (0x3D + 0x20)
+#define SPH  (0x3E + 0x20)
+#define SREG (0x3F + 0x20)
 //-------------------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
@@ -131,7 +131,17 @@ void do_vflag16 ( unsigned int a, unsigned int b, unsigned int c )
     rd>>=1; //carry out in lsbit
     rc=(rc^rd)&1; //if carry in != carry out then signed overflow
     if(rc) sreg|=VBIT;
-}//-------------------------------------------------------------------
+}
+//-------------------------------------------------------------------
+int is32bit ( unsigned short inst2 )
+{
+    if((inst2&0xFE0E)==0x940E) return(1); //CALL
+    if((inst2&0xFE0E)==0x940C) return(1); //JMP
+    if((inst2&0xFE0F)==0x9000) return(1); //LDS
+    if((inst2&0xFE0F)==0x9200) return(1); //STS
+    return(0);
+}
+//-------------------------------------------------------------------
 void write_register ( unsigned char r, unsigned char data )
 {
     r&=31;
@@ -693,6 +703,14 @@ int run_one ( void )
     }
 
     //BSET pattern 1001 0100 0sss 1000
+    //SEC  pattern 1001 0100 0000 1000
+    //SEH  pattern 1001 0100 0101 1000
+    //SEI  pattern 1001 0100 0111 1000
+    //SEN  pattern 1001 0100 0010 1000
+    //SES  pattern 1001 0100 0100 1000
+    //SET  pattern 1001 0100 0110 1000
+    //SEV  pattern 1001 0100 0011 1000
+    //SEZ  pattern 1001 0100 0001 1000
     if((inst&0xFF8F)==0x9408)
     {
         rb=((inst>>4)&0x7);
@@ -741,6 +759,7 @@ int run_one ( void )
         return(0);
     }
 
+    //CALL pattern 1001 0100 0000 1110 kkkk kkkk kkkk kkkk 16 bit pc?
     //CALL pattern 1001 010k kkkk 111k kkkk kkkk kkkk kkkk
     if((inst&0xFE0E)==0x940E)
     {
@@ -898,10 +917,7 @@ int run_one ( void )
         rr=((inst&0x0200)>>5)|(inst&0x000F);
         pc_cond=pc_base+2;
         inst2=read_memory(pc_next);
-        if((inst2&0xFE0E)==0x940E) pc_cond+=1; //CALL
-        if((inst2&0xFE0E)==0x940C) pc_cond+=1; //JMP
-        if((inst2&0xFE0F)==0x9000) pc_cond+=1; //LDS
-        if((inst2&0xFE0F)==0x9200) pc_cond+=1; //STS
+        if(is32bit(inst2)) pc_cond+=1;
 #ifdef DISASSEMBLE
         printf("0x%04X: 0x%04X ......    cpse r%u,r%u\n",pc_base,inst,rd,rr);
 #endif
@@ -912,6 +928,7 @@ int run_one ( void )
         {
             pc=pc_cond;
             cycles+=1;
+            if(is32bit(inst2)) cycles+=1;
         }
         else
         {
@@ -1021,7 +1038,7 @@ int run_one ( void )
         return(0);
     }
 
-    //FMUL
+    //FMUL pattern 0000 0011 0ddd 1rrr
     if((inst&0xFF88)==0x0308)
     {
         rd=16+((inst>>4)&0x7);
@@ -1033,7 +1050,7 @@ int run_one ( void )
         return(1);
     }
 
-    //FMULS
+    //FMULS pattern 0000 0011 1ddd 0rrr
     if((inst&0xFF88)==0x0380)
     {
         rd=16+((inst>>4)&0x7);
@@ -1045,7 +1062,7 @@ int run_one ( void )
         return(1);
     }
 
-    //FMULSU
+    //FMULSU pattern 0000 0011 1ddd 1rrr
     if((inst&0xFF88)==0x0388)
     {
         rd=16+((inst>>4)&0x7);
@@ -1057,7 +1074,7 @@ int run_one ( void )
         return(1);
     }
 
-    //ICALL
+    //ICALL pattern 1001 0101 0000 1001
     if(inst==0x9509)
     {
 #ifdef DISASSEMBLE
@@ -1083,7 +1100,7 @@ int run_one ( void )
         return(0);
     }
 
-    //IJMP
+    //IJMP pattern 1001 0100 0000 1001
     if(inst==0x9409)
     {
 #ifdef DISASSEMBLE
@@ -1098,7 +1115,7 @@ int run_one ( void )
         return(0);
     }
 
-    //IN
+    //IN pattern 1011 0aad dddd aaaa
     if((inst&0xF800)==0xB000)
     {
         rk=((inst&0x0600)>>5)|(inst&0x000F);
@@ -1114,7 +1131,7 @@ int run_one ( void )
         return(0);
     }
 
-    //INC
+    //INC pattern 1001 010d dddd 0011
     if((inst&0xFE0F)==0x9403)
     {
         rd=((inst>>4)&0x1F);
@@ -1136,7 +1153,7 @@ int run_one ( void )
         return(0);
     }
 
-    //JMP
+    //JMP pattern 1001 010k kkkk 110k kkkk kkkk kkkk kkkk
     if((inst&0xFE0E)==0x940C)
     {
         inst2=fetch(pc_base+1);
@@ -1156,7 +1173,7 @@ int run_one ( void )
     }
 
 
-    //LAC
+    //LAC  pattern 1001 001r rrrr 0110
     if((inst&0xFE0F)==0x9206)
     {
         rd=(inst>>4)&0x1F;
@@ -1167,7 +1184,7 @@ int run_one ( void )
         return(1);
     }
 
-    //LAS
+    //LAS  pattern 1001 001r rrrr 0101
     if((inst&0xFE0F)==0x9205)
     {
         rd=(inst>>4)&0x1F;
@@ -1178,7 +1195,7 @@ int run_one ( void )
         return(1);
     }
 
-    //LAT
+    //LAT  pattern 1001 001r rrrr 0111
     if((inst&0xFE0F)==0x9207)
     {
         rd=(inst>>4)&0x1F;
@@ -1189,7 +1206,9 @@ int run_one ( void )
         return(1);
     }
 
-    //LDx
+    //LDx  pattern 1001 000d dddd 1100
+    //LDx  pattern 1001 000d dddd 1101
+    //LDx  pattern 1001 000d dddd 1110
     if((inst&0xFE0F)==0x900C)
     {
         rd=(inst>>4)&0x1F;
@@ -1246,7 +1265,10 @@ int run_one ( void )
     }
 
 
-    //LDy
+    //LDy  pattern 1000 000d dddd 1000
+    //LDy  pattern 1001 000d dddd 1001
+    //LDy  pattern 1001 000d dddd 1010
+    //LDy  pattern 10q0 qq0d dddd 1qqq
     if((inst&0xFE0F)==0x8008)
     {
         rd=(inst>>4)&0x1F;
@@ -1302,7 +1324,10 @@ int run_one ( void )
         return(0);
     }
 
-    //LDz
+    //LDz  pattern 1000 000d dddd 0000
+    //LDz  pattern 1001 000d dddd 0001
+    //LDz  pattern 1001 000d dddd 0010
+    //LDz  pattern 10q0 qq0d dddd 0qqq
     if((inst&0xFE0F)==0x8000)
     {
         rd=(inst>>4)&0x1F;
@@ -1358,7 +1383,8 @@ int run_one ( void )
         return(0);
     }
 
-    //LDI
+    //LDI  pattern 1110 kkkk dddd kkkk
+    //SER  pattern 1110 1111 dddd 1111
     if((inst&0xF000)==0xE000)
     {
         rk=((inst&0x0F00)>>4)|(inst&0x000F);
@@ -1372,7 +1398,7 @@ int run_one ( void )
         return(0);
     }
 
-    //LDS
+    //LDS  pattern 1001 000d dddd 0000 kkkk kkkk kkkk kkkk
     if((inst&0xFE0F)==0x9000)
     {
         inst2=fetch(pc_base+1);
@@ -1389,7 +1415,7 @@ int run_one ( void )
         return(0);
     }
 
-    //LDS
+    //LDS  pattern 1010 0kkk dddd kkkk
     if((inst&0xF800)==0xA000)
     {
         rd=16+((inst>>4)&0xF);
@@ -1405,7 +1431,9 @@ int run_one ( void )
         return(0);
     }
 
-    //LPM
+    //LPM  pattern 1001 0101 1100 1000
+    //LPM  pattern 1001 000d dddd 0100
+    //LPM  pattern 1001 000d dddd 0101
     if(inst==0x95C8)
     {
 #ifdef DISASSEMBLE
@@ -1457,7 +1485,7 @@ int run_one ( void )
         return(0);
     }
 
-    //LSR
+    //LSR  pattern 1001 010d dddd 0110
     if((inst&0xFE0F)==0x9406)
     {
         rd=((inst>>4)&0x1F);
@@ -1482,7 +1510,7 @@ int run_one ( void )
         return(0);
     }
 
-    //MOV
+    //MOV  pattern 0010 11rd dddd rrrr
     if((inst&0xFC00)==0x2C00)
     {
         rd=((inst>>4)&0x1F);
@@ -1498,7 +1526,7 @@ int run_one ( void )
         return(0);
     }
 
-    //MOVW
+    //MOVW pattern 0000 0001 dddd rrrr
     if((inst&0xFF00)==0x0100)
     {
         rd=((inst>>3)&0x1E);
@@ -1516,7 +1544,7 @@ int run_one ( void )
         return(0);
     }
 
-    //MUL
+    //MUL  pattern 1001 11rd dddd rrrr
     if((inst&0xFC00)==0x9C00)
     {
         rd=((inst>>4)&0x1F);
@@ -1532,7 +1560,7 @@ int run_one ( void )
         return(1);
     }
 
-    //MULS
+    //MULS pattern 0000 0010 dddd rrrr
     if((inst&0xFF00)==0x0200)
     {
         rd=16+((inst>>4)&0xF);
@@ -1548,7 +1576,7 @@ int run_one ( void )
         return(1);
     }
 
-    //MULSU
+    //MULSU pattern 0000 0011 0ddd 0rrr
     if((inst&0xFF88)==0x0300)
     {
         rd=16+((inst>>4)&0x7);
@@ -1564,7 +1592,7 @@ int run_one ( void )
         return(1);
     }
 
-    //NEG
+    //NEG  pattern 1001 010d dddd 0001
     if((inst&0xFE0F)==0x9401)
     {
         rd=((inst>>4)&0x1F);
@@ -1588,7 +1616,7 @@ int run_one ( void )
         return(0);
     }
 
-    //NOP
+    //NOP  pattern 0000 0000 0000 0000
     if(inst==0x0000)
     {
         rd=((inst>>4)&0x1F);
@@ -1601,7 +1629,7 @@ int run_one ( void )
         return(0);
     }
 
-    //OR
+    //OR  pattern 0010 10rd dddd rrrr
     if((inst&0xFC00)==0x2800)
     {
         rd=((inst>>4)&0x1F);
@@ -1628,7 +1656,8 @@ int run_one ( void )
         return(0);
     }
 
-    //ORI
+    //ORI  pattern 0110 kkkk dddd kkkk
+    //SBR  pattern 0110 kkkk dddd kkkk
     if((inst&0xF000)==0x6000)
     {
         rd=16+((inst>>4)&0xF);
@@ -1654,7 +1683,7 @@ int run_one ( void )
         return(0);
     }
 
-    //OUT
+    //OUT  pattern 1011 1aar rrrr aaaa
     if((inst&0xF800)==0xB800)
     {
         rk=((inst&0x0600)>>5)|(inst&0x000F);
@@ -1669,7 +1698,7 @@ int run_one ( void )
         return(0);
     }
 
-    //POP
+    //POP  pattern 1001 000d dddd 1111
     if((inst&0xFE0F)==0x900F)
     {
         rd=(inst>>4)&0x1F;
@@ -1685,7 +1714,7 @@ int run_one ( void )
     }
 
 
-    //PUSH
+    //PUSH pattern 1001 001d dddd 1111
     if((inst&0xFE0F)==0x920F)
     {
         rd=(inst>>4)&0x1F;
@@ -1700,7 +1729,7 @@ int run_one ( void )
         return(0);
     }
 
-    //RCALL
+    //RCALL pattern 1101 kkkk kkkk kkkk
     if((inst&0xF000)==0xD000)
     {
         rk=inst&0x0FFF;
@@ -1725,7 +1754,7 @@ int run_one ( void )
         return(0);
     }
 
-    //RET
+    //RET  pattern 1001 0101 0000 1000
     if(inst==0x9508)
     {
 #ifdef DISASSEMBLE
@@ -1748,7 +1777,7 @@ int run_one ( void )
         return(0);
     }
 
-    //RETI
+    //RETI pattern 1001 0101 0001 1000
     if(inst==0x9518)
     {
 #ifdef DISASSEMBLE
@@ -1772,7 +1801,7 @@ int run_one ( void )
         return(0);
     }
 
-    //RJMP
+    //RJMP 1100 kkkk kkkk kkkk
     if((inst&0xF000)==0xC000)
     {
         rk=inst&0xFFF;
@@ -1789,10 +1818,10 @@ int run_one ( void )
 
 
 
-    //ROR
+    //ROR pattern 1001 010d dddd 0111
     if((inst&0xFE0F)==0x9407)
     {
-        rd=16+((inst>>4)&0xF);
+        rd=((inst>>4)&0x1F);
 #ifdef DISASSEMBLE
         printf("0x%04X: 0x%04X ......    ror r%u\n",pc_base,inst,rd);
 #endif
@@ -1820,7 +1849,7 @@ int run_one ( void )
         return(0);
     }
 
-    //SBC
+    //SBC  pattern 0000 10rd dddd rrrr
     if((inst&0xFC00)==0x0800)
     {
         rd=((inst>>4)&0x1F);
@@ -1847,7 +1876,7 @@ int run_one ( void )
         return(0);
     }
 
-    //SBCI
+    //SBCI pattern 0100 kkkk dddd kkkk
     if((inst&0xF000)==0x4000)
     {
         rd=16+((inst>>4)&0xF);
@@ -1873,7 +1902,7 @@ int run_one ( void )
         return(0);
     }
 
-    //SBI
+    //SBI  pattern 1001 1010 aaaa abbb
     if((inst&0xFF00)==0x9A00)
     {
         rb=inst&7;
@@ -1891,17 +1920,14 @@ int run_one ( void )
     }
 
 
-    //SBIC
+    //SBIC pattern 1001 1001 aaaa abbb
     if((inst&0xFF00)==0x9900)
     {
         ra=((inst>>3)&0x1F);
         rb=(inst&0x0007);
         pc_cond=pc_base+2;
         inst2=read_memory(pc_next);
-        if((inst2&0xFE0E)==0x940E) pc_cond+=1; //CALL
-        if((inst2&0xFE0E)==0x940C) pc_cond+=1; //JMP
-        if((inst2&0xFE0F)==0x9000) pc_cond+=1; //LDS
-        if((inst2&0xFE0F)==0x9200) pc_cond+=1; //STS
+        if(is32bit(inst2)) pc_cond+=1;
 #ifdef DISASSEMBLE
         printf("0x%04X: 0x%04X ......    sbic 0x%02X,%u\n",pc_base,inst,ra,rb);
 #endif
@@ -1910,7 +1936,7 @@ int run_one ( void )
         {
             pc=pc_cond;
             cycles+=1;
-            //another cycle if next one is two words. todo
+            if(is32bit(inst2)) cycles+=1;
         }
         else
         {
@@ -1920,17 +1946,14 @@ int run_one ( void )
         return(0);
     }
 
-    //SBIS
+    //SBIS pattern 1001 1011 aaaa abbb
     if((inst&0xFF00)==0x9B00)
     {
         ra=((inst>>3)&0x1F);
         rb=(inst&0x0007);
         pc_cond=pc_base+2;
         inst2=read_memory(pc_next);
-        if((inst2&0xFE0E)==0x940E) pc_cond+=1; //CALL
-        if((inst2&0xFE0E)==0x940C) pc_cond+=1; //JMP
-        if((inst2&0xFE0F)==0x9000) pc_cond+=1; //LDS
-        if((inst2&0xFE0F)==0x9200) pc_cond+=1; //STS
+        if(is32bit(inst2)) pc_cond+=1;
 #ifdef DISASSEMBLE
         printf("0x%04X: 0x%04X ......    sbis 0x%02X,%u\n",pc_base,inst,ra,rb);
 #endif
@@ -1939,7 +1962,7 @@ int run_one ( void )
         {
             pc=pc_cond;
             cycles+=1;
-            //another cycle if next one is two words. todo
+            if(is32bit(inst2)) cycles+=1;
         }
         else
         {
@@ -1949,7 +1972,7 @@ int run_one ( void )
         return(0);
     }
 
-    //SBIW
+    //SBIW pattern 1001 0111 kkdd kkkk
     if((inst&0xFF00)==0x9700)
     {
         rd=24+((inst>>3)&0x6);
@@ -1977,17 +2000,14 @@ int run_one ( void )
     }
 
 
-    //SBRC
+    //SBRC pattern 1111 110r rrrr 0bbb
     if((inst&0xFE08)==0xFC00)
     {
         rr=((inst>>4)&0x1F);
         rb=(inst&0x0007);
         pc_cond=pc_base+2;
         inst2=read_memory(pc_next);
-        if((inst2&0xFE0E)==0x940E) pc_cond+=1; //CALL
-        if((inst2&0xFE0E)==0x940C) pc_cond+=1; //JMP
-        if((inst2&0xFE0F)==0x9000) pc_cond+=1; //LDS
-        if((inst2&0xFE0F)==0x9200) pc_cond+=1; //STS
+        if(is32bit(inst2)) pc_cond+=1;
 #ifdef DISASSEMBLE
         printf("0x%04X: 0x%04X ......    sbrc r%u,%u\n",pc_base,inst,rr,rb);
 #endif
@@ -2007,17 +2027,14 @@ int run_one ( void )
     }
 
 
-    //SBRS
+    //SBRS pattern 1111 111r rrrr 0bbb
     if((inst&0xFE08)==0xFE00)
     {
         rr=((inst>>4)&0x1F);
         rb=(inst&0x0007);
         pc_cond=pc_base+2;
         inst2=read_memory(pc_next);
-        if((inst2&0xFE0E)==0x940E) pc_cond+=1; //CALL
-        if((inst2&0xFE0E)==0x940C) pc_cond+=1; //JMP
-        if((inst2&0xFE0F)==0x9000) pc_cond+=1; //LDS
-        if((inst2&0xFE0F)==0x9200) pc_cond+=1; //STS
+        if(is32bit(inst2)) pc_cond+=1;
 #ifdef DISASSEMBLE
         printf("0x%04X: 0x%04X ......    sbrs r%u,%u\n",pc_base,inst,rr,rb);
 #endif
@@ -2036,7 +2053,7 @@ int run_one ( void )
         return(0);
     }
 
-    //SLEEP
+    //SLEEP pattern 1001 0101 1000 1000
     if(inst==0x9588)
     {
 #ifdef DISASSEMBLE
@@ -2048,7 +2065,8 @@ int run_one ( void )
         return(1);
     }
 
-    //spm
+    //SPM  pattern 1001 0101 1110 1000
+    //SPM  pattern 1001 0101 1111 1000
     if(inst==0x95E8)
     {
 #ifdef DISASSEMBLE
@@ -2066,17 +2084,19 @@ int run_one ( void )
         return(1);
     }
 
-    //STx
+    //STx  pattern 1001 001r rrrr 1100
+    //STx  pattern 1001 001r rrrr 1101
+    //STx  pattern 1001 001r rrrr 1110
     if((inst&0xFE0F)==0x920C)
     {
-        rd=(inst>>4)&0x1F;
+        rr=(inst>>4)&0x1F;
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    st x,r%u\n",pc_base,inst,rd);
+        printf("0x%04X: 0x%04X ......    st x,r%u\n",pc_base,inst,rr);
 #endif
         ra=read_register(26);
         rb=read_register(27);
         rk=(rb<<8)|ra;
-        rc=read_register(rd);
+        rc=read_register(rr);
         write_memory(rk,rc);
 
         pc=pc_next;
@@ -2085,14 +2105,14 @@ int run_one ( void )
     }
     if((inst&0xFE0F)==0x920D)
     {
-        rd=(inst>>4)&0x1F;
+        rr=(inst>>4)&0x1F;
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    st x+,r%u\n",pc_base,inst,rd);
+        printf("0x%04X: 0x%04X ......    st x+,r%u\n",pc_base,inst,rr);
 #endif
         ra=read_register(26);
         rb=read_register(27);
         rk=(rb<<8)|ra;
-        rc=read_register(rd);
+        rc=read_register(rr);
         write_memory(rk,rc);
         rk=rk+1;
         write_register(26,(rk>>0)&0xFF);
@@ -2104,15 +2124,15 @@ int run_one ( void )
     }
     if((inst&0xFE0F)==0x920E)
     {
-        rd=(inst>>4)&0x1F;
+        rr=(inst>>4)&0x1F;
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    st -x,r%u\n",pc_base,inst,rd);
+        printf("0x%04X: 0x%04X ......    st -x,r%u\n",pc_base,inst,rr);
 #endif
         ra=read_register(26);
         rb=read_register(27);
         rk=(rb<<8)|ra;
         rk=rk-1;
-        rc=read_register(rd);
+        rc=read_register(rr);
         write_memory(rk,rc);
         write_register(26,(rk>>0)&0xFF);
         write_register(27,(rk>>8)&0xFF);
@@ -2122,19 +2142,20 @@ int run_one ( void )
         return(0);
     }
 
-
-
-    //STy
+    //STy  pattern 1000 001r rrrr 1000
+    //STy  pattern 1001 001r rrrr 1001
+    //STy  pattern 1001 001r rrrr 1010
+    //STy  pattern 10q0 qq1r rrrr 1qqq
     if((inst&0xFE0F)==0x8208)
     {
-        rd=(inst>>4)&0x1F;
+        rr=(inst>>4)&0x1F;
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    st y,r%u\n",pc_base,inst,rd);
+        printf("0x%04X: 0x%04X ......    st y,r%u\n",pc_base,inst,rr);
 #endif
         ra=read_register(28);
         rb=read_register(29);
         rk=(rb<<8)|ra;
-        rc=read_register(rd);
+        rc=read_register(rr);
         write_memory(rk,rc);
 
         pc=pc_next;
@@ -2143,14 +2164,14 @@ int run_one ( void )
     }
     if((inst&0xFE0F)==0x9209)
     {
-        rd=(inst>>4)&0x1F;
+        rr=(inst>>4)&0x1F;
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    st y+,r%u\n",pc_base,inst,rd);
+        printf("0x%04X: 0x%04X ......    st y+,r%u\n",pc_base,inst,rr);
 #endif
         ra=read_register(28);
         rb=read_register(29);
         rk=(rb<<8)|ra;
-        rc=read_register(rd);
+        rc=read_register(rr);
         write_memory(rk,rc);
         rk=rk+1;
         write_register(28,(rk>>0)&0xFF);
@@ -2162,15 +2183,15 @@ int run_one ( void )
     }
     if((inst&0xFE0F)==0x920A)
     {
-        rd=(inst>>4)&0x1F;
+        rr=(inst>>4)&0x1F;
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    st -y,r%u\n",pc_base,inst,rd);
+        printf("0x%04X: 0x%04X ......    st -y,r%u\n",pc_base,inst,rr);
 #endif
         ra=read_register(28);
         rb=read_register(29);
         rk=(rb<<8)|ra;
         rk=rk-1;
-        rc=read_register(rd);
+        rc=read_register(rr);
         write_memory(rk,rc);
         write_register(28,(rk>>0)&0xFF);
         write_register(29,(rk>>8)&0xFF);
@@ -2180,19 +2201,20 @@ int run_one ( void )
         return(0);
     }
 
-
-
-    //STz
+    //STz  pattern 1000 001r rrrr 0000
+    //STz  pattern 1001 001r rrrr 0001
+    //STz  pattern 1001 001r rrrr 0010
+    //STz  pattern 10q0 qq1r rrrr 0qqq
     if((inst&0xFE0F)==0x8200)
     {
-        rd=(inst>>4)&0x1F;
+        rr=(inst>>4)&0x1F;
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    st z,r%u\n",pc_base,inst,rd);
+        printf("0x%04X: 0x%04X ......    st z,r%u\n",pc_base,inst,rr);
 #endif
         ra=read_register(30);
         rb=read_register(31);
         rk=(rb<<8)|ra;
-        rc=read_register(rd);
+        rc=read_register(rr);
         write_memory(rk,rc);
 
         pc=pc_next;
@@ -2201,14 +2223,14 @@ int run_one ( void )
     }
     if((inst&0xFE0F)==0x9201)
     {
-        rd=(inst>>4)&0x1F;
+        rr=(inst>>4)&0x1F;
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    st z+,r%u\n",pc_base,inst,rd);
+        printf("0x%04X: 0x%04X ......    st z+,r%u\n",pc_base,inst,rr);
 #endif
         ra=read_register(30);
         rb=read_register(31);
         rk=(rb<<8)|ra;
-        rc=read_register(rd);
+        rc=read_register(rr);
         write_memory(rk,rc);
         rk=rk+1;
         write_register(30,(rk>>0)&0xFF);
@@ -2220,15 +2242,15 @@ int run_one ( void )
     }
     if((inst&0xFE0F)==0x9202)
     {
-        rd=(inst>>4)&0x1F;
+        rr=(inst>>4)&0x1F;
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    st -z,r%u\n",pc_base,inst,rd);
+        printf("0x%04X: 0x%04X ......    st -z,r%u\n",pc_base,inst,rr);
 #endif
         ra=read_register(30);
         rb=read_register(31);
         rk=(rb<<8)|ra;
         rk=rk-1;
-        rc=read_register(rd);
+        rc=read_register(rr);
         write_memory(rk,rc);
         write_register(30,(rk>>0)&0xFF);
         write_register(31,(rk>>8)&0xFF);
@@ -2238,8 +2260,7 @@ int run_one ( void )
         return(0);
     }
 
-
-    //STS
+    //STS  pattern 1001 001d dddd 0000 kkkk kkkk kkkk kkkk
     if((inst&0xFE0F)==0x9200)
     {
         inst2=fetch(pc_base+1);
@@ -2256,7 +2277,7 @@ int run_one ( void )
         return(0);
     }
 
-    //STS
+    //STS  pattern 1010 1kkk dddd kkkk
     if((inst&0xF800)==0xA800)
     {
         rd=16+((inst>>4)&0xF);
@@ -2272,7 +2293,7 @@ int run_one ( void )
         return(0);
     }
 
-    //SUB
+    //SUB  pattern 0001 10rd dddd rrrr
     if((inst&0xFC00)==0x1800)
     {
         rd=((inst>>4)&0x1F);
@@ -2298,8 +2319,7 @@ int run_one ( void )
         return(0);
     }
 
-
-    //SUBI
+    //SUBI pattern 0101 kkkk dddd kkkk
     if((inst&0xF000)==0x5000)
     {
         rd=16+((inst>>4)&0xF);
@@ -2324,8 +2344,7 @@ int run_one ( void )
         return(0);
     }
 
-
-    //SWAP
+    //SWAP pattern 1001 010d dddd 0010
     if((inst&0xFE0F)==0x9402)
     {
         rd=((inst>>4)&0x1F);
@@ -2341,7 +2360,7 @@ int run_one ( void )
         return(0);
     }
 
-    //WDR
+    //WDR  pattern 1001 0101 1010 1000
     if(inst==0x95A8)
     {
 #ifdef DISASSEMBLE
@@ -2354,7 +2373,7 @@ int run_one ( void )
         return(0);
     }
 
-    //XCH
+    //XCH  pattern 1001 001r rrrr 0100
     if((inst&0xFE0F)==0x9204)
     {
         rd=((inst>>4)&0x1F);
