@@ -13,6 +13,15 @@ unsigned int hit[ROMMASK+1];
 unsigned char newline[1024];
 unsigned char gstring[80];
 //-----------------------------------------------------------------------------
+//-------------------------------------------------------------------
+int is32bit ( unsigned short inst2 )
+{
+    if((inst2&0xFE0E)==0x940E) return(1); //CALL
+    if((inst2&0xFE0E)==0x940C) return(1); //JMP
+    if((inst2&0xFE0F)==0x9000) return(1); //LDS
+    if((inst2&0xFE0F)==0x9200) return(1); //STS
+    return(0);
+}
 //-----------------------------------------------------------------------------
 void add_hit ( unsigned int add )
 {
@@ -204,216 +213,100 @@ unsigned int find_hits ( unsigned int pc_base )
         return(0);
     }
 
-//    //CP   pattern 0001 01rd dddd rrrr
-//    if((inst&0xFC00)==0x1400)
-//    {
-//        rd=((inst>>4)&0x1F);
-//        rr=((inst&0x0200)>>5)|(inst&0x000F);
-//#ifdef DISASSEMBLE
-//        printf("0x%04X: 0x%04X ......    cp r%u,r%u\n",pc_base,inst,rd,rr);
-//#endif
-//        ra=read_register(rd);
-//        rb=read_register(rr);
-//        rc=(ra-rr)&0xFF;
-//
-//        sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-//        do_hflag(ra,~rb,1);
-//        do_cflag(ra,~rb,1);
-//        do_vflag(ra,~rb,1);
-//        if(rc&0x80) set_nbit();
-//        do_sflag();
-//        if(rc==0x00) set_zbit();
-//
-//        add_hit(pc_next);
-//        cycles+=1;
-//        return(0);
-//    }
-//
-//    //CPC  pattern 0000 01rd dddd rrrr
-//    if((inst&0xFC00)==0x0400)
-//    {
-//        rd=((inst>>4)&0x1F);
-//        rr=((inst&0x0200)>>5)|(inst&0x000F);
-//#ifdef DISASSEMBLE
-//        printf("0x%04X: 0x%04X ......    cpc r%u,r%u\n",pc_base,inst,rd,rr);
-//#endif
-//        ra=read_register(rd);
-//        rb=read_register(rr);
-//        if(sreg&CBIT) rk=1; else rk=0;
-//        rc=(ra-rr-rk)&0xFF;
-//
-//        sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-//        do_hflag(ra,~rb,rk);
-//        do_cflag(ra,~rb,rk);
-//        do_vflag(ra,~rb,rk);
-//        if(rc&0x80) set_nbit();
-//        do_sflag();
-//        if(rc==0x00) set_zbit();
-//
-//        add_hit(pc_next);
-//        cycles+=1;
-//        return(0);
-//    }
-//
-//    //CPI  pattern 0011 kkkk dddd kkkk
-//    if((inst&0xF000)==0x3000)
-//    {
-//        rk=((inst&0x0F00)>>4)|(inst&0x000F);
-//        rd=16+((inst>>4)&0xF);
-//#ifdef DISASSEMBLE
-//        printf("0x%04X: 0x%04X ......    cpi r%u,0x%02X ; %u\n",pc_base,inst,rd,rk,rk);
-//#endif
-//        ra=read_register(rd);
-//        rc=(ra-rk)&0xFF;
-//
-//        sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-//        do_hflag(ra,~rk,1);
-//        do_cflag(ra,~rk,1);
-//        do_vflag(ra,~rk,1);
-//        if(rc&0x80) set_nbit();
-//        do_sflag();
-//        if(rc==0x00) set_zbit();
-//
-//        add_hit(pc_next);
-//        cycles+=1;
-//        return(0);
-//    }
-//
-//    //CPSE pattern 0001 00rd dddd rrrr
-//    if((inst&0xFC00)==0x1000)
-//    {
-//        rd=((inst>>4)&0x1F);
-//        rr=((inst&0x0200)>>5)|(inst&0x000F);
-//        pc_cond=pc_base+2;
-//        inst2=read_memory(pc_next);
-//        if(is32bit(inst2)) pc_cond+=1;
-//#ifdef DISASSEMBLE
-//        printf("0x%04X: 0x%04X ......    cpse r%u,r%u\n",pc_base,inst,rd,rr);
-//#endif
-//        ra=read_register(rd);
-//        rb=read_register(rr);
-//
-//        if(ra==rb)
-//        {
-//            pc=pc_cond;
-//            cycles+=1;
-//            if(is32bit(inst2)) cycles+=1;
-//        }
-//        else
-//        {
-//            add_hit(pc_next);
-//        }
-//        cycles+=1;
-//        return(0);
-//    }
-//
-//
-//    //DEC  pattern 1001 010d dddd 1010
-//    if((inst&0xFE0F)==0x940A)
-//    {
-//        rd=((inst>>4)&0x1F);
-//#ifdef DISASSEMBLE
-//        printf("0x%04X: 0x%04X ......    dec r%u\n",pc_base,inst,rd);
-//#endif
-//        ra=read_register(rd);
-//        rc=(ra-1)&0xFF;
-//        write_register(rd,rc);
-//
-//        sreg&=~(SBIT|VBIT|NBIT|ZBIT);
-//        if(ra==0x80) set_vbit();
-//        if(ra&0x80) set_nbit();
-//        if(ra==0x00) set_zbit();
-//        do_sflag();
-//
-//        add_hit(pc_next);
-//        cycles+=1;
-//        return(0);
-//    }
-//
-//    //DES  pattern 1001 0100 kkkk 1011
-//    if((inst&0xFF0F)==0x940B)
-//    {
-//        printf("DES NOT SUPPORTED\n");
-//        return(1);
-//    }
-//
-//    //EICALL pattern 1001 0101 0001 1001
-//    if(inst==0x9519)
-//    {
-//        printf("EICALL NOT SUPPORTED\n");
-//        return(1);
-//    }
-//
-//    //EIJMP pattern 1001 0100 0001 1001
-//    if(inst==0x9419)
-//    {
-//        printf("EIJMP NOT SUPPORTED\n");
-//        return(1);
-//    }
-//
-//    //ELPM pattern 1001 0101 1101 1000
-//    //ELPM pattern 1001 000d dddd 0110
-//    //ELPM pattern 1001 000d dddd 0111
-//    if(inst==0x95D8)
-//    {
-//        printf("ELPM NOT SUPPORTED\n");
-//        return(1);
-//    }
-//    if((inst&0xFE0F)==0x9006)
-//    {
-//        printf("ELPM NOT SUPPORTED\n");
-//        return(1);
-//    }
-//    if((inst&0xFE0F)==0x9007)
-//    {
-//        printf("ELPM NOT SUPPORTED\n");
-//        return(1);
-//    }
-//
-//    //EOR  pattern 0010 01rd dddd rrrr
-//    //CLR  pattern 0010 01dd dddd dddd
-//    if((inst&0xFC00)==0x2400)
-//    {
-//        rd=((inst>>4)&0x1F);
-//        rr=((inst&0x0200)>>5)|(inst&0x000F);
-//#ifdef DISASSEMBLE
-//        if(rd==rr)
-//        {
-//            printf("0x%04X: 0x%04X ......    clr r%u\n",pc_base,inst,rd);
-//        }
-//        else
-//        {
-//            printf("0x%04X: 0x%04X ......    eor r%u,r%u\n",pc_base,inst,rd,rr);
-//        }
-//#endif
-//        ra=read_register(rd);
-//        rb=read_register(rr);
-//        rc=(ra^rb)&0xFF;
-//        write_register(rd,rc);
-//
-//        sreg&=~(SBIT|VBIT|NBIT|ZBIT);
-//        //clr_vbit();
-//        if(rc&0x80) set_nbit();
-//        do_sflag();
-//        if(rc==0x00) set_zbit();
-//
-//        add_hit(pc_next);
-//        cycles+=1;
-//        return(0);
-//    }
-//
-//    //FMUL pattern 0000 0011 0ddd 1rrr
-//    if((inst&0xFF88)==0x0308)
-//    {
-//        rd=16+((inst>>4)&0x7);
-//        rr=16+(inst&0x7);
-//#ifdef DISASSEMBLE
-//        printf("0x%04X: 0x%04X ......    fmul r%u,r%u\n",pc_base,inst,rd,rr);
-//#endif
-//        //not supported right now, what chips use this?
-//        return(1);
-//    }
-//
+    //CP   pattern 0001 01rd dddd rrrr
+    if((inst&0xFC00)==0x1400)
+    {
+        add_hit(pc_next);
+        return(0);
+    }
+
+    //CPC  pattern 0000 01rd dddd rrrr
+    if((inst&0xFC00)==0x0400)
+    {
+        add_hit(pc_next);
+        return(0);
+    }
+
+    //CPI  pattern 0011 kkkk dddd kkkk
+    if((inst&0xF000)==0x3000)
+    {
+        add_hit(pc_next);
+        return(0);
+    }
+
+    //CPSE pattern 0001 00rd dddd rrrr
+    if((inst&0xFC00)==0x1000)
+    {
+        pc_cond=pc_base+2;
+        inst2=rom[(pc_next&ROMMASK)];
+        if(is32bit(inst2)) pc_cond+=1;
+        add_hit(pc_cond);
+        add_hit(pc_next);
+        return(0);
+    }
+
+    //DEC  pattern 1001 010d dddd 1010
+    if((inst&0xFE0F)==0x940A)
+    {
+        add_hit(pc_next);
+        return(0);
+    }
+
+    //DES  pattern 1001 0100 kkkk 1011
+    if((inst&0xFF0F)==0x940B)
+    {
+        printf("DES NOT SUPPORTED\n");
+        return(1);
+    }
+
+    //EICALL pattern 1001 0101 0001 1001
+    if(inst==0x9519)
+    {
+        printf("EICALL NOT SUPPORTED\n");
+        return(1);
+    }
+
+    //EIJMP pattern 1001 0100 0001 1001
+    if(inst==0x9419)
+    {
+        printf("EIJMP NOT SUPPORTED\n");
+        return(1);
+    }
+
+    //ELPM pattern 1001 0101 1101 1000
+    //ELPM pattern 1001 000d dddd 0110
+    //ELPM pattern 1001 000d dddd 0111
+    if(inst==0x95D8)
+    {
+        printf("ELPM NOT SUPPORTED\n");
+        return(1);
+    }
+    if((inst&0xFE0F)==0x9006)
+    {
+        printf("ELPM NOT SUPPORTED\n");
+        return(1);
+    }
+    if((inst&0xFE0F)==0x9007)
+    {
+        printf("ELPM NOT SUPPORTED\n");
+        return(1);
+    }
+
+    //EOR  pattern 0010 01rd dddd rrrr
+    //CLR  pattern 0010 01dd dddd dddd
+    if((inst&0xFC00)==0x2400)
+    {
+        add_hit(pc_next);
+        return(0);
+    }
+
+    //FMUL pattern 0000 0011 0ddd 1rrr
+    if((inst&0xFF88)==0x0308)
+    {
+        add_hit(pc_next);
+        return(1);
+    }
+
 //    //FMULS pattern 0000 0011 1ddd 0rrr
 //    if((inst&0xFF88)==0x0380)
 //    {
