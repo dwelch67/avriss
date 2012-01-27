@@ -1,5 +1,5 @@
 
-simavr - avr instruction set simulator
+avriss - avr instruction set simulator
 
 This is very lightly tested at the moment, expecting to find some bugs.
 
@@ -12,7 +12,7 @@ Likewise instruction fetch, memio read/write counters, again no
 guarantee on accuracy vs hardware.
 
 The input is intel hex files, there are some defines in the code
-(simavr.c) that you can comment/uncomment to see more about what is
+(avriss.c) that you can comment/uncomment to see more about what is
 going on with your program.  Disassembly mode is not a bad way to run
 if it is not too slow, it shows instructions in execution order.
 Register and memio read/writes and instruction fetches go through a

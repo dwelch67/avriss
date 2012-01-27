@@ -1,15 +1,15 @@
 
-all : simavr dissavr
+all : avriss avrdiss
 
-dissavr : dissavr.c
-	gcc -O2 dissavr.c -o dissavr
+avrdiss : avrdiss.c
+	gcc -O2 avrdiss.c -o avrdiss
 
 
-simavr : simavr.c
-	gcc -O2 simavr.c -o simavr
+avriss : avriss.c
+	gcc -O2 avriss.c -o avriss
 
 clean :
-	rm -f simavr
-	rm -f dissavr
+	rm -f avriss
+	rm -f avrdiss
 
 
