@@ -4,7 +4,7 @@
 //#define SHOWREGS
 //#define SHOWMEM
 //#define SHOWROM
-#define DISASSEMBLE
+//#define DISASSEMBLE
 //-------------------------------------------------------------------
 // use data memory based address I/O address + 0x20
 #define SPL  (0x3D + 0x20)
@@ -12,6 +12,10 @@
 #define SREG (0x3F + 0x20)
 
 #define SHOW 0x2F
+
+#define UARTF0_BASE 0xBA0
+
+
 
 //-------------------------------------------------------------------
 #include <stdio.h>
@@ -203,6 +207,11 @@ void write_memory ( unsigned short address, unsigned char data )
             case SHOW:
             {
                 printf("show: 0x%02X\n",data);
+                break;
+            }
+            case UARTF0_BASE+0x00:
+            {
+                printf("%c",data);
                 break;
             }
             default:
@@ -1321,6 +1330,23 @@ int run_one ( void )
         cycles+=3;
         return(0);
     }
+    if((inst&0xD208)==0x8008)
+    {
+        rr=(inst>>4)&0x1F;
+        rx=((inst&0x2000)>>8)|((inst&0x0C00)>>7)|(inst&0x0007);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    ld r%u,y+0x%02X ; %u\n",pc_base,inst,rr,rx,rx);
+#endif
+        ra=read_register(28);
+        rb=read_register(29);
+        rk=(rb<<8)|ra;
+        rc=read_memory(rk+rx);
+        write_register(rd,rc);
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
 
     //LDz  pattern 1000 000d dddd 0000
     //LDz  pattern 1001 000d dddd 0001
@@ -1380,6 +1406,25 @@ int run_one ( void )
         cycles+=3;
         return(0);
     }
+    if((inst&0xD208)==0x8000)
+    {
+        rr=(inst>>4)&0x1F;
+        rx=((inst&0x2000)>>8)|((inst&0x0C00)>>7)|(inst&0x0007);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    ld r%u,z+0x%02X ; %u\n",pc_base,inst,rr,rx,rx);
+#endif
+        ra=read_register(30);
+        rb=read_register(31);
+        rk=(rb<<8)|ra;
+        rc=read_memory(rk+rx);
+        write_register(rd,rc);
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
+
+
 
     //LDI  pattern 1110 kkkk dddd kkkk
     //SER  pattern 1110 1111 dddd 1111
@@ -2182,6 +2227,23 @@ int run_one ( void )
         cycles+=2;
         return(0);
     }
+    if((inst&0xD208)==0x8208)
+    {
+        rr=(inst>>4)&0x1F;
+        rx=((inst&0x2000)>>8)|((inst&0x0C00)>>7)|(inst&0x0007);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    st y+%u,r%u ; 0x%02X\n",pc_base,inst,rx,rr,rx);
+#endif
+        ra=read_register(28);
+        rb=read_register(29);
+        rk=(rb<<8)|ra;
+        rc=read_register(rr);
+        write_memory(rk+rx,rc);
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
 
     //STz  pattern 1000 001r rrrr 0000
     //STz  pattern 1001 001r rrrr 0001
@@ -2241,6 +2303,26 @@ int run_one ( void )
         cycles+=2;
         return(0);
     }
+    if((inst&0xD208)==0x8200)
+    {
+        rr=(inst>>4)&0x1F;
+        rx=((inst&0x2000)>>8)|((inst&0x0C00)>>7)|(inst&0x0007);
+#ifdef DISASSEMBLE
+        printf("0x%04X: 0x%04X ......    st z+%u,r%u ; 0x%02X\n",pc_base,inst,rx,rr,rx);
+#endif
+        ra=read_register(30);
+        rb=read_register(31);
+        rk=(rb<<8)|ra;
+        rc=read_register(rr);
+        write_memory(rk+rx,rc);
+
+        pc=pc_next;
+        cycles+=1;
+        return(0);
+    }
+
+
+
 
     //STS  pattern 1001 001d dddd 0000 kkkk kkkk kkkk kkkk
     if((inst&0xFE0F)==0x9200)
