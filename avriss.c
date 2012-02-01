@@ -1,10 +1,10 @@
 
 //-------------------------------------------------------------------
 //-------------------------------------------------------------------
-//#define SHOWREGS
+#define SHOWREGS
 //#define SHOWMEM
 //#define SHOWROM
-//#define DISASSEMBLE
+#define DISASSEMBLE
 //-------------------------------------------------------------------
 // use data memory based address I/O address + 0x20
 #define SPL  (0x3D + 0x20)
@@ -52,6 +52,23 @@ void set_cbit ( void ) { sreg|=CBIT; }
 void set_hbit ( void ) { sreg|=HBIT; }
 void set_ibit ( void ) { sreg|=IBIT; }
 //-------------------------------------------------------------------
+void show_sreg ( void )
+{
+#ifdef SHOWREGS
+    printf("write_register SREG 0x%02X (%u) ",sreg,sreg);
+    if(sreg&IBIT) printf("I"); else printf("i");
+    if(sreg&TBIT) printf("T"); else printf("t");
+    if(sreg&HBIT) printf("H"); else printf("h");
+    if(sreg&SBIT) printf("S"); else printf("s");
+
+    if(sreg&VBIT) printf("V"); else printf("v");
+    if(sreg&NBIT) printf("N"); else printf("n");
+    if(sreg&ZBIT) printf("Z"); else printf("z");
+    if(sreg&CBIT) printf("C"); else printf("c");
+    printf("\n");
+#endif
+}
+//-------------------------------------------------------------------
 void do_sflag ( void )
 {
     switch(sreg&(NBIT|VBIT))
@@ -72,10 +89,13 @@ void do_cflag ( unsigned int a, unsigned int b, unsigned int c )
 
     a&=0xFF;
     b&=0xFF;
+    c&=0x01;
     sreg&=~CBIT;
-    rc=(a&0x7F)+(b&0x7F)+c; //carry in
-    rc = (rc>>7)+(a>>7)+(b>>7);  //carry out
-    if(rc&2) sreg|=CBIT;
+    //rc=(a&0x7F)+(b&0x7F)+c; //carry in
+    //rc = (rc>>7)+(a>>7)+(b>>7);  //carry out
+    //if(rc&2) sreg|=CBIT;
+    rc=a+b+c;
+    if(rc&0x100) sreg|=CBIT;
 }
 //-------------------------------------------------------------------
 void do_hflag ( unsigned int a, unsigned int b, unsigned int c )
@@ -84,10 +104,43 @@ void do_hflag ( unsigned int a, unsigned int b, unsigned int c )
 
     a&=0xF;
     b&=0xF;
+    c&=0x1;
     sreg&=~HBIT;
-    rc=(a&0x7)+(b&0x7)+c; //carry in
-    rc = (rc>>3)+(a>>3)+(b>>3);  //carry out
-    if(rc&2) sreg|=HBIT;
+    //rc=(a&0x7)+(b&0x7)+c; //carry in
+    //rc = (rc>>3)+(a>>3)+(b>>3);  //carry out
+    //if(rc&2) sreg|=HBIT;
+    rc=a+b+c;
+    if(rc&0x10) sreg|=HBIT;
+}
+//-------------------------------------------------------------------
+void do_cflag_sub ( unsigned int a, unsigned int b, unsigned int c )
+{
+    unsigned int rc;
+
+    a&=0xFF;
+    b&=0xFF;
+    c&=0x01;
+    sreg|=CBIT;
+    //rc=(a&0x7F)+(b&0x7F)+c; //carry in
+    //rc = (rc>>7)+(a>>7)+(b>>7);  //carry out
+    //if(rc&2) sreg|=CBIT;
+    rc=a+b+c;
+    if(rc&0x100) sreg&=~CBIT;
+}
+//-------------------------------------------------------------------
+void do_hflag_sub ( unsigned int a, unsigned int b, unsigned int c )
+{
+    unsigned int rc;
+
+    a&=0xF;
+    b&=0xF;
+    c&=0x1;
+    sreg|=HBIT;
+    //rc=(a&0x7)+(b&0x7)+c; //carry in
+    //rc = (rc>>3)+(a>>3)+(b>>3);  //carry out
+    //if(rc&2) sreg|=HBIT;
+    rc=a+b+c;
+    if(rc&0x10) sreg&=~HBIT;
 }
 //-------------------------------------------------------------------
 void do_vflag ( unsigned int a, unsigned int b, unsigned int c )
@@ -97,6 +150,7 @@ void do_vflag ( unsigned int a, unsigned int b, unsigned int c )
 
     a&=0xFF;
     b&=0xFF;
+    c&=0x01;
     sreg&=~VBIT;
     rc=(a&0x7F)+(b&0x7F)+c; //carry in
     rc>>=7; //carry in in lsbit
@@ -113,10 +167,22 @@ void do_cflag16 ( unsigned int a, unsigned int b, unsigned int c )
 
     a&=0xFFFF;
     b&=0xFFFF;
+    c&=0x0001;
     sreg&=~CBIT;
-    rc=(a&0x7FFF)+(b&0x7FFF)+c; //carry in
-    rc = (rc>>15)+(a>>15)+(b>>15);  //carry out
-    if(rc&2) sreg|=CBIT;
+    rc=a+b+c;
+    if(rc&0x10000) sreg|=CBIT;
+}
+//-------------------------------------------------------------------
+void do_cflag16_sub ( unsigned int a, unsigned int b, unsigned int c )
+{
+    unsigned int rc;
+
+    a&=0xFFFF;
+    b&=0xFFFF;
+    c&=0x0001;
+    sreg|=CBIT;
+    rc=a+b+c;
+    if(rc&0x10000) sreg&=~CBIT;
 }
 //-------------------------------------------------------------------
 void do_vflag16 ( unsigned int a, unsigned int b, unsigned int c )
@@ -126,6 +192,7 @@ void do_vflag16 ( unsigned int a, unsigned int b, unsigned int c )
 
     a&=0xFFFF;
     b&=0xFFFF;
+    c&=0x0001;
     sreg&=~VBIT;
     rc=(a&0x7FFF)+(b&0x7FFF)+c; //carry in
     rc>>=15; //carry in in lsbit
@@ -177,7 +244,7 @@ void write_memory ( unsigned short address, unsigned char data )
     {
         write_register(address,data);
     }
-    else if(address<0x60)
+    else
     {
         switch(address)
         {
@@ -221,10 +288,6 @@ void write_memory ( unsigned short address, unsigned char data )
             }
         }
     }
-    else
-    {
-        mem[address]=data;
-    }
 }
 //-------------------------------------------------------------------
 unsigned char read_memory ( unsigned short address )
@@ -237,7 +300,7 @@ unsigned char read_memory ( unsigned short address )
     {
         data=read_register(address);
     }
-    else if(address<0x60)
+    else
     {
         switch(address)
         {
@@ -267,10 +330,6 @@ unsigned char read_memory ( unsigned short address )
                 break;
             }
         }
-    }
-    else
-    {
-        data=mem[address];
     }
 #ifdef SHOWMEM
     printf("read_memory  [0x%04X] 0x%02X (%u)\n",address,data,data);
@@ -357,6 +416,7 @@ int run_one ( void )
                 case 0xC0: break;
             }
             do_sflag();
+            show_sreg();
         }
         else
         {
@@ -376,6 +436,7 @@ int run_one ( void )
             if(rc&0x80) set_nbit();
             if(rc==0x00) set_zbit();
             do_sflag();
+            show_sreg();
         }
         pc=pc_next;
         cycles+=1;
@@ -410,6 +471,7 @@ int run_one ( void )
                 case 0xC0: break;
             }
             do_sflag();
+            show_sreg();
 
         }
         else
@@ -429,6 +491,7 @@ int run_one ( void )
             if(rc&0x80) set_nbit();
             if(rc==0x00) set_zbit();
             do_sflag();
+            show_sreg();
 
         }
 
@@ -457,6 +520,7 @@ int run_one ( void )
         if(rc&0x8000) set_nbit();
         if(rc==0x0000) set_zbit();
         do_sflag();
+        show_sreg();
 
         write_register(rd+1,(rc>>8)&0xFF);
         write_register(rd+0,(rc>>0)&0xFF);
@@ -490,6 +554,7 @@ int run_one ( void )
                 set_sbit();
             }
             if(rc==0x00) set_zbit();
+            show_sreg();
         }
         else
         {
@@ -509,6 +574,7 @@ int run_one ( void )
                 set_sbit();
             }
             if(rc==0x00) set_zbit();
+            show_sreg();
         }
 
         pc=pc_next;
@@ -538,6 +604,7 @@ int run_one ( void )
             set_sbit();
         }
         if(rc==0x00) set_zbit();
+        show_sreg();
 
         write_register(rd,rc);
         pc=pc_next;
@@ -567,6 +634,7 @@ int run_one ( void )
         if(rc&0x80) set_nbit();
         if(rc==0x00) set_zbit();
         do_sflag();
+        show_sreg();
 
         write_register(rd,rc);
         pc=pc_next;
@@ -603,6 +671,7 @@ int run_one ( void )
         printf("\n");
 #endif
         sreg&=~(1<<rb);
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -651,7 +720,7 @@ int run_one ( void )
         pc_cond=(pc_base+rk+1)&ROMMASK;
         rb=(inst&0x7);
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    brbc %u,0x%04X ; ",pc_base,inst,rb,pc_cond);
+        printf("0x%04X: 0x%04X ......    brbc %u,0x%04X ; sreg = 0x%02X ",pc_base,inst,rb,pc_cond,sreg);
         switch(rb)
         {
             case  0: printf("CC brcc/brsh"); break;
@@ -696,7 +765,7 @@ int run_one ( void )
         pc_cond=(pc_base+rk+1)&ROMMASK;
         rb=(inst&0x7);
 #ifdef DISASSEMBLE
-        printf("0x%04X: 0x%04X ......    brbs %u,0x%04X ; ",pc_base,inst,rb,pc_cond);
+        printf("0x%04X: 0x%04X ......    brbs %u,0x%04X ; sreg = 0x%02X ",pc_base,inst,rb,pc_cond,sreg);
         switch(rb)
         {
             case  0: printf("CS brcs/brlo"); break;
@@ -753,6 +822,7 @@ int run_one ( void )
         printf("\n");
 #endif
         sreg|=(1<<rb);
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -776,6 +846,7 @@ int run_one ( void )
         {
             clr_tbit();
         }
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -848,6 +919,7 @@ int run_one ( void )
         if(rc&0x8000) set_nbit();
         if(rc==0x0000) set_zbit();
         do_sflag();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -867,12 +939,13 @@ int run_one ( void )
         rc=(ra-rr)&0xFF;
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_hflag(ra,~rb,1);
-        do_cflag(ra,~rb,1);
+        do_hflag_sub(ra,~rb,1);
+        do_cflag_sub(ra,~rb,1);
         do_vflag(ra,~rb,1);
         if(rc&0x80) set_nbit();
         do_sflag();
         if(rc==0x00) set_zbit();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -893,12 +966,13 @@ int run_one ( void )
         rc=(ra-rr-rk)&0xFF;
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_hflag(ra,~rb,rk);
-        do_cflag(ra,~rb,rk);
+        do_hflag_sub(ra,~rb,rk);
+        do_cflag_sub(ra,~rb,rk);
         do_vflag(ra,~rb,rk);
         if(rc&0x80) set_nbit();
         do_sflag();
         if(rc==0x00) set_zbit();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -917,12 +991,13 @@ int run_one ( void )
         rc=(ra-rk)&0xFF;
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_hflag(ra,~rk,1);
-        do_cflag(ra,~rk,1);
+        do_hflag_sub(ra,~rk,1);
+        do_cflag_sub(ra,~rk,1);
         do_vflag(ra,~rk,1);
         if(rc&0x80) set_nbit();
         do_sflag();
         if(rc==0x00) set_zbit();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -970,10 +1045,11 @@ int run_one ( void )
         write_register(rd,rc);
 
         sreg&=~(SBIT|VBIT|NBIT|ZBIT);
-        if(ra==0x80) set_vbit();
-        if(ra&0x80) set_nbit();
-        if(ra==0x00) set_zbit();
+        if(rc==0x80) set_vbit();
+        if(rc&0x80) set_nbit();
+        if(rc==0x00) set_zbit();
         do_sflag();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -1046,6 +1122,7 @@ int run_one ( void )
         if(rc&0x80) set_nbit();
         do_sflag();
         if(rc==0x00) set_zbit();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -1150,10 +1227,11 @@ int run_one ( void )
         write_register(rd,rc);
 
         sreg&=~(SBIT|VBIT|NBIT|ZBIT);
-        if(ra==0x7F) set_vbit();
-        if(ra&0x80) set_nbit();
-        if(ra==0x00) set_zbit();
+        if(rc==0x7F) set_vbit();
+        if(rc&0x80) set_nbit();
+        if(rc==0x00) set_zbit();
         do_sflag();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -1436,6 +1514,7 @@ int run_one ( void )
         printf("0x%04X: 0x%04X ......    ldi r%u,0x%02X ; %u\n",pc_base,inst,rd,rk,rk);
 #endif
         write_register(rd,rk);
+
         pc=pc_next;
         cycles+=1;
         return(0);
@@ -1547,6 +1626,7 @@ int run_one ( void )
         }
         if(rc==0x00) set_zbit();
         do_sflag();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -1647,12 +1727,13 @@ int run_one ( void )
         write_register(rd,rc);
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_hflag(0,~rb,1);
-        do_cflag(0,~rb,1);
+        do_hflag_sub(0,~rb,1);
+        do_cflag_sub(0,~rb,1);
         do_vflag(0,~rb,1);
         if(rc&0x80) set_nbit();
         if(rc==0x00) set_zbit();
         do_sflag();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -1692,6 +1773,7 @@ int run_one ( void )
             set_sbit();
         }
         if(rc==0x00) set_zbit();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -1718,6 +1800,7 @@ int run_one ( void )
             set_sbit();
         }
         if(rc==0x00) set_zbit();
+        show_sreg();
 
         write_register(rd,rc);
         pc=pc_next;
@@ -1735,6 +1818,7 @@ int run_one ( void )
 #endif
         ra=read_register(rd);
         write_memory(rk+0x20,ra);
+
         pc=pc_next;
         cycles+=1;
         return(0);
@@ -1855,6 +1939,7 @@ int run_one ( void )
         ra=read_register(rd);
         rc=(ra>>1);
         if(sreg&CBIT) rc|=0x80;
+        write_register(rd,rc);
 
         sreg&=~(SBIT|VBIT|NBIT|ZBIT|CBIT);
         if(ra&0x01) set_cbit();
@@ -1870,6 +1955,7 @@ int run_one ( void )
                 break;
         }
         do_sflag();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -1891,12 +1977,13 @@ int run_one ( void )
         write_register(rd,rc);
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_hflag(ra,~rb,rx);
-        do_cflag(ra,~rb,rx);
+        do_hflag_sub(ra,~rb,rx);
+        do_cflag_sub(ra,~rb,rx);
         do_vflag(ra,~rb,rx);
         if(rc&0x80) set_nbit();
         if(rc==0x00) set_zbit();
         do_sflag();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -1917,12 +2004,13 @@ int run_one ( void )
         write_register(rd,rc);
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_hflag(ra,~rb,rx);
-        do_cflag(ra,~rb,rx);
+        do_hflag_sub(ra,~rb,rx);
+        do_cflag_sub(ra,~rb,rx);
         do_vflag(ra,~rb,rx);
         if(rc&0x80) set_nbit();
         if(rc==0x00) set_zbit();
         do_sflag();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -2015,11 +2103,12 @@ int run_one ( void )
         write_register(rd+1,(rc>>8)&0xFF);
 
         sreg&=~(SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_cflag16(ra,~rk,1);
+        do_cflag16_sub(ra,~rk,1);
         do_vflag16(ra,~rk,1);
         if(rc&0x8000) set_nbit();
         if(rc==0x0000) set_zbit();
         do_sflag();
+        show_sreg();
 
         pc=pc_next;
         cycles+=2;
@@ -2372,12 +2461,13 @@ int run_one ( void )
         write_register(rd,rc);
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_hflag(ra,~rb,1);
-        do_cflag(ra,~rb,1);
+        do_hflag_sub(ra,~rb,1);
+        do_cflag_sub(ra,~rb,1);
         do_vflag(ra,~rb,1);
         if(rc&0x80) set_nbit();
         if(rc==0x00) set_zbit();
         do_sflag();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
@@ -2397,12 +2487,13 @@ int run_one ( void )
         write_register(rd,rc);
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_hflag(ra,~rk,1);
-        do_cflag(ra,~rk,1);
+        do_hflag_sub(ra,~rk,1);
+        do_cflag_sub(ra,~rk,1);
         do_vflag(ra,~rk,1);
         if(rc&0x80) set_nbit();
         if(rc==0x00) set_zbit();
         do_sflag();
+        show_sreg();
 
         pc=pc_next;
         cycles+=1;
