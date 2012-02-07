@@ -755,6 +755,11 @@ unsigned int find_hits ( unsigned int pc_base )
         add_hit(pc_next);
         return(0);
     }
+    if((inst&0xD208)==0x8208)
+    {
+        add_hit(pc_next);
+        return(0);
+    }
 
     //STz  pattern 1000 001r rrrr 0000
     //STz  pattern 1001 001r rrrr 0001
@@ -1747,6 +1752,13 @@ int diss  ( unsigned int pc_base )
         printf("0x%04X: 0x%04X ......    st -y,r%u\n",pc_base,inst,rr);
         return(0);
     }
+    if((inst&0xD208)==0x8208)
+    {
+        rr=(inst>>4)&0x1F;
+        rb=((inst&0x2000)>>8)|((inst&0x0C00)>>7)|(inst&0x0007);
+        printf("0x%04X: 0x%04X ......    st y+%u,r%u ; 0x%02X\n",pc_base,inst,rb,rr,rb);
+        return(0);
+    }
 
     //STz  pattern 1000 001r rrrr 0000
     //STz  pattern 1001 001r rrrr 0001
@@ -2014,21 +2026,23 @@ int main ( int argc, char *argv[] )
     while(1)
     {
         newhits=0;
-        for(ra=0;ra<maxadd;ra++)
+        for(ra=0;ra<=maxadd;ra++)
         {
             if(hit[ra]) find_hits(ra);
         }
         if(newhits==0) break;
     }
 
-    for(ra=0;ra<maxadd;ra++)
+    for(ra=0;ra<=maxadd;ra++)
     {
 //        printf("0x%04X : 0x%04X %u\n",ra,rom[ra],hit[ra]);
     }
 
-    for(ra=0;ra<maxadd;ra++)
+    for(ra=0;ra<=maxadd;ra++)
     {
         if(hit[ra]) diss(ra);
+        else printf("0x%04X: 0x%04X ...... \n",ra,rom[ra]);
+
     }
 
 
