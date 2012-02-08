@@ -1,0 +1,16 @@
+
+MEMORY
+{
+   rom : ORIGIN = 0x00000000, LENGTH = 0x1000
+   xmega : ORIGIN = 0x00002000, LENGTH = 0x1000
+   mega : ORIGIN = 0x00000100, LENGTH = 0x400
+}
+
+SECTIONS
+{
+   .text : { *(.text*) } > rom
+   .trampolines : { *(.trampolines*) } > rom
+   .bss  : { *(.bss*) } > mega
+/*   .data : { *(.data*) } > ram */
+}
+
