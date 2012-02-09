@@ -33,19 +33,19 @@ int notmain ( void )
     unsigned int ra,rb,rc;
 
     uart_init();
-//    hexstring16(0x1234);
+    hexstring16(0x1234);
 
-    rc=0;
-    for(ra=0;ra<0x100;ra++)
-    {
-        for(rb=0;rb<0x100;rb++)
-        {
-            rc+=subtest(ra,rb);
-        }
-    }
-    hexstring16(rc);
+    //rc=0;
+    //for(ra=0;ra<0x100;ra++)
+    //{
+        //for(rb=0;rb<0x100;rb++)
+        //{
+            //rc+=subtest(ra,rb);
+        //}
+    //}
+    //hexstring16(rc);
 
 
-//    run_primes_test();
+    run_primes_test();
     return(0);
 }

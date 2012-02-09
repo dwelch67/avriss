@@ -65,16 +65,16 @@ int run_primes_test ( void )
     }
 
 
-    //for(ra=0,rb=0;ra<MAX;ra++)
-    //{
-        ////hexstring16(pmap[ra]);
-        //if(pmap[ra]==2)
-        //{
-            //rb++;
-            //hexstring16(ra);
-        //}
-    //}
-    //hexstring16(rb);
+    for(ra=0,rb=0;ra<MAX;ra++)
+    {
+        //hexstring16(pmap[ra]);
+        if(pmap[ra]==2)
+        {
+            rb++;
+            hexstring16(ra);
+        }
+    }
+    hexstring16(rb);
 
 
     return(0);
