@@ -1,10 +1,10 @@
 
 //-------------------------------------------------------------------
 //-------------------------------------------------------------------
-#define SHOWREGS
+//#define SHOWREGS
 //#define SHOWMEM
 //#define SHOWROM
-#define DISASSEMBLE
+//#define DISASSEMBLE
 //-------------------------------------------------------------------
 // use data memory based address I/O address + 0x20
 #define SPL  (0x3D + 0x20)
@@ -15,6 +15,8 @@
 
 #define UARTF0_BASE 0xBA0
 
+#define UCSRA 0xC0
+#define UDR   0xC6
 
 
 //-------------------------------------------------------------------
@@ -55,7 +57,7 @@ void set_ibit ( void ) { sreg|=IBIT; }
 void show_sreg ( void )
 {
 #ifdef SHOWREGS
-    printf("write_register SREG 0x%02X (%u) ",sreg,sreg);
+    printf("SREG 0x%02X (%u) ",sreg,sreg);
     if(sreg&IBIT) printf("I"); else printf("i");
     if(sreg&TBIT) printf("T"); else printf("t");
     if(sreg&HBIT) printf("H"); else printf("h");
@@ -265,18 +267,13 @@ void write_memory ( unsigned short address, unsigned char data )
                 sp|=data;
                 break;
             }
-            //case UDR0:
-            //{
-                //if((data>=0x20)&&(data<0x7F)) printf("%c",data);
-                //else printf("[0x%02X]",data);
-                //break;
-            //}
             case SHOW:
             {
                 printf("show: 0x%02X\n",data);
                 break;
             }
-            case UARTF0_BASE+0x00:
+            //case UARTF0_BASE+0x00:
+            case UDR:
             {
                 printf("%c",data);
                 break;
@@ -319,11 +316,11 @@ unsigned char read_memory ( unsigned short address )
                 data=sp&0xFF;
                 break;
             }
-            //case UCSR0A:
-            //{
-                //data=0x20; //tx buffer always empty
-                //break;
-            //}
+            case UCSRA:
+            {
+                data=0x20; //tx buffer always empty
+                break;
+            }
             default:
             {
                 data=mem[address];
@@ -968,14 +965,15 @@ int run_one ( void )
         ra=read_register(rd);
         rb=read_register(rr);
         if(sreg&CBIT) rk=1; else rk=0;
+        if(sreg&ZBIT) rx=1; else rx=0;
         rc=(ra-rb-rk)&0xFF;
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_hflag_sub(ra,~rb,rk);
-        do_cflag_sub(ra,~rb,rk);
+        do_hflag_sub(ra,~rb,~rk);
+        do_cflag_sub(ra,~rb,~rk);
         do_vflag(ra,~rb,rk);
         if(rc&0x80) set_nbit();
-        if(rc==0x00) set_zbit();
+        if((rc==0x00)&&(rx)) set_zbit();
         do_sflag();
         show_sreg();
 
@@ -1991,16 +1989,17 @@ int run_one ( void )
 #endif
         ra=read_register(rd);
         rb=read_register(rr);
-        if(sreg&CBIT) { rk=1; rx=0; } else { rk=0; rx=1; }
+        if(sreg&CBIT) rk=1; else rk=0;
+        if(sreg&ZBIT) rx=1; else rx=0;
         rc=(ra-rb-rk)&0xFF;
         write_register(rd,rc);
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_hflag_sub(ra,~rb,rx);
-        do_cflag_sub(ra,~rb,rx);
-        do_vflag(ra,~rb,rx);
+        do_hflag_sub(ra,~rb,~rk);
+        do_cflag_sub(ra,~rb,~rk);
+        do_vflag(ra,~rb,rk);
         if(rc&0x80) set_nbit();
-        if(rc==0x00) set_zbit();
+        if((rc==0x00)&&(rx)) set_zbit();
         do_sflag();
         show_sreg();
 
@@ -2018,16 +2017,17 @@ int run_one ( void )
         printf("0x%04X: 0x%04X ......    sbci r%u,0x%02X ; %u\n",pc_base,inst,rd,rb,rb);
 #endif
         ra=read_register(rd);
-        if(sreg&CBIT) { rk=1; rx=0; } else { rk=0; rx=1; }
+        if(sreg&CBIT) rk=1; else rk=0;
+        if(sreg&ZBIT) rx=1; else rx=0;
         rc=(ra-rb-rk)&0xFF;
         write_register(rd,rc);
 
         sreg&=~(HBIT|SBIT|VBIT|NBIT|ZBIT|CBIT);
-        do_hflag_sub(ra,~rb,rx);
-        do_cflag_sub(ra,~rb,rx);
-        do_vflag(ra,~rb,rx);
+        do_hflag_sub(ra,~rb,~rk);
+        do_cflag_sub(ra,~rb,~rk);
+        do_vflag(ra,~rb,rk);
         if(rc&0x80) set_nbit();
-        if(rc==0x00) set_zbit();
+        if((rc==0x00)&&(rx)) set_zbit();
         do_sflag();
         show_sreg();
 
